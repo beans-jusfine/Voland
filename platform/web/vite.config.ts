@@ -32,6 +32,7 @@ const crossOriginIsolationHeaders = {
 };
 
 export default defineConfig({
+  base: "/Voland/",
   plugins: [solid()],
   resolve: {
     alias,
