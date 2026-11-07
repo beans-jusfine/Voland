@@ -225,24 +225,24 @@ static CPU_ExitReason interp_step(CPU_State *state) {
   s->cycles_consumed=1;
   return s->svc_seen?CPU_EXIT_SVC:CPU_EXIT_CYCLES_ELAPSED;
 }
-static uint64_t interp_fault(CPU_State *s) { return s->fault_address; }
-static uint64_t interp_cycles(CPU_State *s) { return s->cycles_consumed; }
-static uint64_t interp_get_reg(CPU_State *s,uint8_t i) { return i<=30?s->regs.x[i]:0; }
-static void interp_set_reg(CPU_State *s,uint8_t i,uint64_t v) { if(i<=30)s->regs.x[i]=v; }
-static uint64_t interp_get_pc(CPU_State *s) { return s->regs.pc; }
-static void interp_set_pc(CPU_State *s,uint64_t v) { s->regs.pc=v; }
-static uint64_t interp_get_sp(CPU_State *s) { return s->regs.sp; }
-static void interp_set_sp(CPU_State *s,uint64_t v) { s->regs.sp=v; }
-static uint32_t interp_get_pstate(CPU_State *s) { return s->regs.pstate; }
-static void interp_set_pstate(CPU_State *s,uint32_t v) { s->regs.pstate=v; }
-static CPU_Register_File *interp_get_file(CPU_State *s) { return &s->regs; }
-static uint64_t interp_get_sys(CPU_State *s,uint32_t r) { return r==CPU_SYSREG_TPIDRRO_EL0?s->tpidrro_el0:0; }
-static void interp_set_sys(CPU_State *s,uint32_t r,uint64_t v) { if(r==CPU_SYSREG_TPIDRRO_EL0)s->tpidrro_el0=v; }
-static void interp_invalidate(CPU_State *s,uint64_t a,uint64_t n) { (void)s;(void)a;(void)n; }
-static void interp_clear(CPU_State *s) { (void)s; }
-static void interp_svc(CPU_State *s,CPU_SVC_Handler h) { s->svc_handler=h; }
-static void interp_undefined(CPU_State *s,CPU_Undefined_Handler h) { s->undefined_handler=h; }
-static void interp_breakpoint(CPU_State *s,CPU_Breakpoint_Handler h) { s->breakpoint_handler=h; }
+static uint64_t interp_fault(CPU_State *state) { return ((InterpreterState *)state)->fault_address; }
+static uint64_t interp_cycles(CPU_State *state) { return ((InterpreterState *)state)->cycles_consumed; }
+static uint64_t interp_get_reg(CPU_State *state,uint8_t i) { InterpreterState *s=(InterpreterState *)state; return i<=30?s->regs.x[i]:0; }
+static void interp_set_reg(CPU_State *state,uint8_t i,uint64_t v) { InterpreterState *s=(InterpreterState *)state; if(i<=30)s->regs.x[i]=v; }
+static uint64_t interp_get_pc(CPU_State *state) { return ((InterpreterState *)state)->regs.pc; }
+static void interp_set_pc(CPU_State *state,uint64_t v) { ((InterpreterState *)state)->regs.pc=v; }
+static uint64_t interp_get_sp(CPU_State *state) { return ((InterpreterState *)state)->regs.sp; }
+static void interp_set_sp(CPU_State *state,uint64_t v) { ((InterpreterState *)state)->regs.sp=v; }
+static uint32_t interp_get_pstate(CPU_State *state) { return ((InterpreterState *)state)->regs.pstate; }
+static void interp_set_pstate(CPU_State *state,uint32_t v) { ((InterpreterState *)state)->regs.pstate=v; }
+static CPU_Register_File *interp_get_file(CPU_State *state) { return &((InterpreterState *)state)->regs; }
+static uint64_t interp_get_sys(CPU_State *state,uint32_t r) { InterpreterState *s=(InterpreterState *)state; return r==CPU_SYSREG_TPIDRRO_EL0?s->tpidrro_el0:0; }
+static void interp_set_sys(CPU_State *state,uint32_t r,uint64_t v) { InterpreterState *s=(InterpreterState *)state; if(r==CPU_SYSREG_TPIDRRO_EL0)s->tpidrro_el0=v; }
+static void interp_invalidate(CPU_State *state,uint64_t a,uint64_t n) { (void)state;(void)a;(void)n; }
+static void interp_clear(CPU_State *state) { (void)state; }
+static void interp_svc(CPU_State *state,CPU_SVC_Handler h) { ((InterpreterState *)state)->svc_handler=h; }
+static void interp_undefined(CPU_State *state,CPU_Undefined_Handler h) { ((InterpreterState *)state)->undefined_handler=h; }
+static void interp_breakpoint(CPU_State *state,CPU_Breakpoint_Handler h) { ((InterpreterState *)state)->breakpoint_handler=h; }
 
 const CPU_Backend CPU_BACKEND_INTERPRETER = {
   .create=interp_create,.destroy=interp_destroy,.run=interp_run,.step=interp_step,
