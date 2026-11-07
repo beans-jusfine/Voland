@@ -19,7 +19,9 @@ const sw: ServiceWorkerGlobalScope = globalThis as unknown as ServiceWorkerGloba
 
 const SHELL_CACHE = "voland-shell-v1";
 const WASM_CACHE = "voland-wasm-v1";
-const SHELL_URL = "/index.html";
+const BASE_URL = new URL(".", sw.registration.scope); 
+const BASE_PATH = BASE_URL.pathname; 
+const SHELL_URL = new URL("index.html", BASE_URL).href;
 
 /* COOP must be strict "same-origin" - "same-origin-allow-popups" never
  * yields crossOriginIsolated in shipping Chromium regardless of COEP (see
@@ -77,7 +79,7 @@ sw.addEventListener("fetch", (event: FetchEvent) => {
   const url = new URL(event.request.url);
   if (url.origin !== location.origin) return; // let cross-origin requests through untouched
 
-  if (url.pathname.startsWith("/api/")) {
+  if (url.pathname.startsWith(`${BASE_PATH}api/`)) {
     event.respondWith(fetch(event.request).then(addCrossOriginIsolationHeaders));
     return;
   }
