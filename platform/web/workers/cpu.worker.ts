@@ -76,7 +76,7 @@ async function init(memory: WebAssembly.Memory): Promise<void> {
   const ready: CPUToMainMessage = {
     type: "ready",
     backendName,
-    backendVersion: "1.0.0",
+    backendVersion: backendId === 1 ? "0.1.0-dev" : "1.0.0",
   };
   self.postMessage(ready);
 }

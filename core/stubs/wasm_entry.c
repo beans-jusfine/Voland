@@ -107,7 +107,9 @@ EXPORT uint64_t cpu_get_pc_ffi(void)
  * (CPU_BACKEND is a CMake configure-time choice, never a runtime one). */
 EXPORT int cpu_backend_id_ffi(void)
 {
-#if defined(SWITCH_CPU_BACKEND_NOOP)
+#if defined(SWITCH_CPU_BACKEND_INTERPRETER)
+  return 1; /* CpuBackendId.Interpreter, bindings/core.ts */
+#elif defined(SWITCH_CPU_BACKEND_NOOP)
   return 0; /* CpuBackendId.Noop, bindings/core.ts */
 #else
   return -1;

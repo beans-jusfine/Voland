@@ -7,6 +7,7 @@ set(SWITCH_CORE_SOURCES
   common/vmm.c
   cpu/cpu.c
   cpu/backends/noop/noop.c
+  cpu/backends/interpreter/interpreter.c
   hle/hle.c
   hle/kernel/page_allocator.c
   hle/kernel/address_space.c
@@ -53,6 +54,7 @@ set(SWITCH_CORE_PUBLIC_HEADERS
   common/vmm.h
   cpu/cpu.h
   cpu/backends/noop/noop.h
+  cpu/backends/interpreter/interpreter.h
   hle/hle.h
   hle/kernel/page_allocator.h
   hle/kernel/address_space.h
@@ -86,7 +88,7 @@ target_include_directories(switch_core PUBLIC
 if(CPU_BACKEND STREQUAL "noop")
   target_compile_definitions(switch_core PUBLIC SWITCH_CPU_BACKEND_NOOP=1)
 elseif(CPU_BACKEND STREQUAL "interpreter")
-  message(FATAL_ERROR "interpreter backend is a Phase 2 deliverable, not yet built")
+  target_compile_definitions(switch_core PUBLIC SWITCH_CPU_BACKEND_INTERPRETER=1)
 elseif(CPU_BACKEND STREQUAL "ballistic")
   message(FATAL_ERROR "ballistic backend is a Phase 5 deliverable, not yet built (§10)")
 else()

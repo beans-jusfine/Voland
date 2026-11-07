@@ -1,10 +1,12 @@
 #include "cpu/cpu.h"
 #include "common/log.h"
 
-const CPU_Backend* cpu_get_active_backend(void) {
+const CPU_Backend *cpu_get_active_backend(void) {
 #if defined(SWITCH_CPU_BACKEND_NOOP)
   return &CPU_BACKEND_NOOP;
+#elif defined(SWITCH_CPU_BACKEND_INTERPRETER)
+  return &CPU_BACKEND_INTERPRETER;
 #else
-# error "No CPU_BACKEND_* define set. Configure the build with -DCPU_BACKEND=noop (or a real backend)."
+# error "No CPU_BACKEND_* define set. Configure with -DCPU_BACKEND=noop or interpreter."
 #endif
 }
