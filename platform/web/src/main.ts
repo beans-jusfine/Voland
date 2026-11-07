@@ -33,15 +33,47 @@ function reportCapabilities(caps: PlatformCapabilities): void {
   appendLogLine("debug", `capabilities: ${lines.join(", ")}`);
 }
 
-/** Guarded one-time reload so a fresh visit under SW-injected COOP/COEP
- * headers (rather than real server headers) gets a second pass once the
- * Service Worker actually controls the page (§16). */
+/** Wait until the active Service Worker actually controls this page.
+ * navigator.serviceWorker.ready only guarantees an active worker exists;
+ * it does not by itself guarantee that this client is controlled. */
+function waitForServiceWorkerControl(timeoutMs = 5_000): Promise<boolean> {
+  if (navigator.serviceWorker.controller) return Promise.resolve(true);
+  return new Promise(resolve => {
+    let timer = 0;
+    const finish = (controlled: boolean) => {
+      window.clearTimeout(timer);
+      navigator.serviceWorker.removeEventListener("controllerchange", onChange);
+      resolve(controlled);
+    };
+    const onChange = () => finish(true);
+    navigator.serviceWorker.addEventListener("controllerchange", onChange);
+    timer = window.setTimeout(() => finish(!!navigator.serviceWorker.controller), timeoutMs);
+    if (navigator.serviceWorker.controller) finish(true);
+  });
+}
+
+/** Ask the active worker to claim this client, then reload exactly once so
+ * the navigation response receives the SW-injected COOP/COEP headers. */
 async function reloadOnceForCrossOriginIsolation(): Promise<boolean> {
-  if (sessionStorage.getItem("voland-coi-reload-attempted")) return false;
-  sessionStorage.setItem("voland-coi-reload-attempted", "1");
-  if ("serviceWorker" in navigator) {
-    await navigator.serviceWorker.ready;
+  if (!("serviceWorker" in navigator)) return false;
+
+  const registration = await navigator.serviceWorker.ready;
+  const activeWorker = registration.active;
+  if (!activeWorker) throw new Error("Service Worker registration is ready but has no active worker.");
+
+  if (!navigator.serviceWorker.controller) {
+    const controlled = waitForServiceWorkerControl();
+    activeWorker.postMessage({ type: "VOLAND_CLAIM_CLIENTS" });
+    if (!await controlled) {
+      throw new Error("Service Worker is activated but did not take control of this page. Check its scope and activation.");
+    }
   }
+
+  if (!navigator.serviceWorker.controller) {
+    throw new Error("Service Worker still does not control this page; refusing to reload without COOP/COEP headers.");
+  }
+  if (sessionStorage.getItem("voland-coi-controlled-reload-attempted")) return false;
+  sessionStorage.setItem("voland-coi-controlled-reload-attempted", "1");
   location.reload();
   return true;
 }

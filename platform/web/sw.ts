@@ -75,6 +75,14 @@ sw.addEventListener("activate", (event: ExtendableEvent) => {
   event.waitUntil(sw.clients.claim());
 });
 
+/* Fallback claim request from the page if the initial activation claim
+ * did not attach the currently open client. */
+sw.addEventListener("message", (event: ExtendableMessageEvent) => {
+  if (event.data?.type === "VOLAND_CLAIM_CLIENTS") {
+    event.waitUntil(sw.clients.claim());
+  }
+});
+
 sw.addEventListener("fetch", (event: FetchEvent) => {
   const url = new URL(event.request.url);
   if (url.origin !== location.origin) return; // let cross-origin requests through untouched
