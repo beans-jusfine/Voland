@@ -32,7 +32,7 @@ function log(level: "debug" | "info" | "warn" | "error", message: string): void 
  * -sIMPORTED_MEMORY) and resolves to the instantiated module's exports. */
 type CoreModuleFactory = (options: { wasmMemory: WebAssembly.Memory }) => Promise<SwitchCoreExports>;
 
-const CORE_MODULE_URL = "/core/switch_core.js";
+const CORE_MODULE_URL = `${import.meta.env.BASE_URL}core/switch_core.js`;
 
 async function loadCoreModule(memory: WebAssembly.Memory): Promise<SwitchCoreExports> {
   const factory = (await import(/* @vite-ignore */ CORE_MODULE_URL)).default as CoreModuleFactory;
