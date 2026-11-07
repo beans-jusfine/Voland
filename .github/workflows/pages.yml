@@ -37,7 +37,7 @@ jobs:
           version: ${{ env.EMSDK_VERSION }}
 
       - name: Configure WebAssembly core
-        run: cmake --preset web
+        run: cmake --preset web -DVOLAND_WEB_MEMORY_PAGES=24576 -DVOLAND_WEB_GUEST_RAM_MIB=512
 
       - name: Build WebAssembly core
         run: cmake --build --preset web
@@ -83,6 +83,8 @@ jobs:
           path: platform/web/public/core
 
       - name: Build web frontend
+        env:
+          VOLAND_WEB_MEMORY_PAGES: 24576
         run: pnpm run build
 
       - name: Configure GitHub Pages

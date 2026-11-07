@@ -97,6 +97,10 @@ endif()
 # Web build: expose the core as a WASM module directly from this target.
 #
 if(EMSCRIPTEN)
+  target_compile_definitions(switch_core PUBLIC
+    LAYOUT_LINEAR_MEMORY_PAGES=${VOLAND_WEB_MEMORY_PAGES}
+    LAYOUT_GUEST_RAM_APPLICATION_POOL_SIZE=${VOLAND_WEB_GUEST_APP_POOL_BYTES}ULL
+  )
   add_executable(switch_core_wasm stubs/wasm_entry.c)
   target_link_libraries(switch_core_wasm PRIVATE switch_core)
   set_target_properties(switch_core_wasm PROPERTIES

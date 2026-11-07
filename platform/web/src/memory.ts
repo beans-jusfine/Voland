@@ -12,8 +12,13 @@
  * instantiate.
  */
 
+declare const __VOLAND_WEB_MEMORY_PAGES__: number;
+
 export const WASM_PAGE_BYTES = 65_536;
-export const TOTAL_MEMORY_PAGES = 65_535;
+/* Vite replaces this build constant. The fallback keeps Node unit tests and
+ * non-Vite tooling on the original full-memory profile. */
+export const TOTAL_MEMORY_PAGES =
+  typeof __VOLAND_WEB_MEMORY_PAGES__ === "number" ? __VOLAND_WEB_MEMORY_PAGES__ : 65_535;
 export const TOTAL_MEMORY_BYTES = TOTAL_MEMORY_PAGES * WASM_PAGE_BYTES; // 4_294_901_760
 
 /**

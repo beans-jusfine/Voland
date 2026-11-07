@@ -22,10 +22,19 @@ test("the memory is 65535 wasm32 pages: 4 GiB minus one page, never 2^32 (§4)",
   assert.ok(TOTAL_MEMORY_BYTES < 2 ** 32);
 });
 
-test("CMakeLists.txt's -sINITIAL_MEMORY equals TOTAL_MEMORY_BYTES (§24)", () => {
-  const match = /-sINITIAL_MEMORY=(\d+)/.exec(repoFile("CMakeLists.txt"));
-  assert.ok(match, "no -sINITIAL_MEMORY in CMakeLists.txt");
-  assert.equal(Number(match[1]), TOTAL_MEMORY_BYTES);
+test("CMakeLists.txt derives Emscripten memory from the shared page-count setting (§24)", () => {
+  const cmake = repoFile("CMakeLists.txt");
+  assert.match(cmake, /set\(VOLAND_WEB_MEMORY_PAGES "65535"/);
+  assert.match(cmake, /math\(EXPR VOLAND_WEB_MEMORY_BYTES "\$\{VOLAND_WEB_MEMORY_PAGES\} \* 65536"\)/);
+  assert.match(cmake, /-sINITIAL_MEMORY=\$\{VOLAND_WEB_MEMORY_BYTES\}/);
+  assert.equal(TOTAL_MEMORY_BYTES, 4_294_901_760);
+});
+
+test("GitHub Pages uses the same 1.5 GiB / 512 MiB development profile in both builds", () => {
+  const workflow = repoFile(".github/workflows/pages.yml");
+  assert.match(workflow, /VOLAND_WEB_MEMORY_PAGES=24576/);
+  assert.match(workflow, /VOLAND_WEB_GUEST_RAM_MIB=512/);
+  assert.match(workflow, /VOLAND_WEB_MEMORY_PAGES: 24576/);
 });
 
 test("CMakeLists.txt builds wasm32: no -m64 or MEMORY64 codegen flag (§24)", () => {

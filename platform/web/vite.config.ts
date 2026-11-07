@@ -33,6 +33,9 @@ const crossOriginIsolationHeaders = {
 
 export default defineConfig({
   base: "/Voland/",
+  define: {
+    __VOLAND_WEB_MEMORY_PAGES__: JSON.stringify(Number(process.env.VOLAND_WEB_MEMORY_PAGES ?? "65535")),
+  },
   plugins: [solid()],
   resolve: {
     alias,

@@ -16,6 +16,11 @@ set_property(CACHE GPU_BACKEND PROPERTY STRINGS webgpu vulkan metal d3d12 auto)
 set(AUDIO_BACKEND "auto" CACHE STRING "Audio backend: wasapi|coreaudio|pipewire|none|auto (web: none, §14)")
 set_property(CACHE AUDIO_BACKEND PROPERTY STRINGS wasapi coreaudio pipewire none auto)
 
+# Optional smaller browser profile. Defaults preserve the full 4 GiB layout;
+# constrained deployments can override these at configure time.
+set(VOLAND_WEB_MEMORY_PAGES "65535" CACHE STRING "Web shared-memory size in 64 KiB pages")
+set(VOLAND_WEB_GUEST_RAM_MIB "3333" CACHE STRING "Web guest RAM size in MiB (includes the 48 MiB HLE carve-out)")
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Debug|Release|RelWithDebInfo" FORCE)
 endif()
@@ -78,14 +83,21 @@ if(EMSCRIPTEN)
     -pthread                   # implies SHARED_MEMORY (shared-memory atomics)
     -sSHARED_MEMORY=1          # redundant under -pthread; kept for explicitness
   )
+  if(VOLAND_WEB_MEMORY_PAGES LESS 1 OR VOLAND_WEB_MEMORY_PAGES GREATER 65535)
+    message(FATAL_ERROR "VOLAND_WEB_MEMORY_PAGES must be between 1 and 65535")
+  endif()
+  if(VOLAND_WEB_GUEST_RAM_MIB LESS 48)
+    message(FATAL_ERROR "VOLAND_WEB_GUEST_RAM_MIB must be at least 48 MiB for the HLE carve-out")
+  endif()
+  math(EXPR VOLAND_WEB_MEMORY_BYTES "${VOLAND_WEB_MEMORY_PAGES} * 65536")
+  math(EXPR VOLAND_WEB_GUEST_APP_POOL_BYTES "(${VOLAND_WEB_GUEST_RAM_MIB} - 48) * 1048576")
   add_compile_options(${VOLAND_WASM_CODEGEN_FLAGS})
   add_link_options(
     ${VOLAND_WASM_CODEGEN_FLAGS}
     -sWASM=1
     -sIMPORTED_MEMORY=1        # host creates the single WebAssembly.Memory (§16)
-    -sINITIAL_MEMORY=4294901760   # 65535 pages: 4 GiB minus one page (§4); must
-                                  # equal the host's initial; with growth disabled
-                                  # this IS the maximum, so no separate
+    -sINITIAL_MEMORY=${VOLAND_WEB_MEMORY_BYTES} # Must match the host-created memory.
+                                  # With growth disabled this IS the maximum.
                                   # MAXIMUM_MEMORY - views never go stale
     -sALLOW_MEMORY_GROWTH=0       # fixed at boot (§4); never enable
     -sMODULARIZE=1             # emits a factory function, not a self-executing script

@@ -42,7 +42,9 @@
  * so a mismatch fails at instantiation. layout.c static-asserts that the
  * fixed regions fit inside it with the §4 host budget left over. */
 #define LAYOUT_WASM_PAGE_BYTES ((uint64_t)65536)
+#ifndef LAYOUT_LINEAR_MEMORY_PAGES
 #define LAYOUT_LINEAR_MEMORY_PAGES ((uint64_t)65535)
+#endif
 #define LAYOUT_LINEAR_MEMORY_BYTES (LAYOUT_LINEAR_MEMORY_PAGES * LAYOUT_WASM_PAGE_BYTES)
 
 /* Guest RAM: the application pool plus the HLE carve-out (§4), not the
@@ -54,7 +56,9 @@
  * with its first HLE-owned consumer (hid:, Phase 4). Guest physical
  * address n is linear-memory offset guest_ram_base + n. Page-aligned per
  * §4/§5. */
+#ifndef LAYOUT_GUEST_RAM_APPLICATION_POOL_SIZE
 #define LAYOUT_GUEST_RAM_APPLICATION_POOL_SIZE ((uint64_t)3285 * LAYOUT_MIB)
+#endif
 #define LAYOUT_GUEST_RAM_HLE_CARVEOUT_SIZE ((uint64_t)48 * LAYOUT_MIB)
 #define LAYOUT_GUEST_RAM_HLE_CARVEOUT_BASE_PA LAYOUT_GUEST_RAM_APPLICATION_POOL_SIZE
 #define LAYOUT_GUEST_RAM_SIZE \
