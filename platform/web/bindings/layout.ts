@@ -58,8 +58,9 @@ export function readMemoryLayout(memory: WebAssembly.Memory, layoutPtr: number):
     gpuRingBase:           field(5),
     gpuCompletionRingBase: field(6),
     inputRegionBase:       field(7),
-    traceBufferBase:       field(8),
-    breakpointRegionBase:  field(9),
+    outputRegionBase:      field(8),
+    traceBufferBase:       field(9),
+    breakpointRegionBase:  field(10),
   };
 }
 
