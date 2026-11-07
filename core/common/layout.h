@@ -95,12 +95,18 @@
 #define LAYOUT_GPU_RING_SIZE ((uint64_t)4 * 1024 * 1024)
 #define LAYOUT_GPU_COMPLETION_RING_SIZE ((uint64_t)64 * 1024)
 
-/* Input region: 8 controller slots, seqlock + buttons + axes + flags,
- * rounded up to 32 bytes/slot (§18). */
+/* Input region (§18): eight 64-byte controller slots plus one 128-byte
+ * touch block (header + ten 12-byte points), v3.29. */
 #define LAYOUT_INPUT_REGION_MAX_CONTROLLERS ((uint64_t)8)
-#define LAYOUT_INPUT_REGION_SLOT_BYTES ((uint64_t)32)
+#define LAYOUT_INPUT_REGION_SLOT_BYTES ((uint64_t)64)
+#define LAYOUT_INPUT_REGION_TOUCH_BYTES ((uint64_t)128)
 #define LAYOUT_INPUT_REGION_SIZE \
-  (LAYOUT_INPUT_REGION_MAX_CONTROLLERS * LAYOUT_INPUT_REGION_SLOT_BYTES)
+  (LAYOUT_INPUT_REGION_MAX_CONTROLLERS * LAYOUT_INPUT_REGION_SLOT_BYTES + LAYOUT_INPUT_REGION_TOUCH_BYTES)
+
+/* CPU-to-main HID output (§18): eight 32-byte rumble/LED slots. */
+#define LAYOUT_OUTPUT_REGION_SLOT_BYTES ((uint64_t)32)
+#define LAYOUT_OUTPUT_REGION_SIZE \
+  (LAYOUT_INPUT_REGION_MAX_CONTROLLERS * LAYOUT_OUTPUT_REGION_SLOT_BYTES)
 
 /* Trace buffer: write index + pad + capacity x 24-byte Trace_Event (§23). */
 #define LAYOUT_TRACE_BUFFER_CAPACITY ((uint64_t)65536)
@@ -119,7 +125,7 @@
 #define LAYOUT_SMALL_REGIONS_SIZE \
   (LAYOUT_PAGE_TABLE_L1_SIZE + LAYOUT_FRAMEBUFFER_REGION_SIZE + LAYOUT_AUDIO_RING_SIZE + \
    LAYOUT_GPU_RING_SIZE + LAYOUT_GPU_COMPLETION_RING_SIZE + LAYOUT_INPUT_REGION_SIZE + \
-   LAYOUT_TRACE_BUFFER_SIZE + LAYOUT_BREAKPOINT_REGION_SIZE + (uint64_t)64)
+   LAYOUT_OUTPUT_REGION_SIZE + LAYOUT_TRACE_BUFFER_SIZE + LAYOUT_BREAKPOINT_REGION_SIZE + (uint64_t)64)
 
 typedef struct Memory_Layout {
   uint64_t guest_ram_base;         /* linear-memory offset of guest physical RAM */
@@ -129,7 +135,8 @@ typedef struct Memory_Layout {
   uint64_t audio_ring_base;        /* §14 */
   uint64_t gpu_ring_base;          /* §13 */
   uint64_t gpu_completion_ring_base; /* §13: GPU->CPU syncpoint completions */
-  uint64_t input_region_base;      /* §18 */
+  uint64_t input_region_base;      /* §18: controllers + touch */
+  uint64_t output_region_base;     /* §18: rumble + player LEDs */
   uint64_t trace_buffer_base;      /* §23 */
   uint64_t breakpoint_region_base; /* §23 */
 } Memory_Layout;
