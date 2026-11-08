@@ -22,7 +22,7 @@
       "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "CPU_BACKEND": "noop"
+        "CPU_BACKEND": "interpreter"
       }
     }
   ],
