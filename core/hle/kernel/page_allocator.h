@@ -54,6 +54,8 @@ typedef struct Page_Allocator {
   uint64_t size_bytes; /* extent; page multiple */
   uint64_t used_bytes; /* bump high-water mark, page multiple: base_pa +
                         * used_bytes is the bump cursor */
+  uint64_t allocated_bytes; /* pages currently owned by live guest allocations */
+  uint64_t peak_allocated_bytes; /* highest simultaneous live allocation total */
   Page_Run free_runs[PAGE_ALLOCATOR_MAX_FREE_RUNS];
   uint32_t free_run_count;
 } Page_Allocator;
