@@ -110,7 +110,10 @@ function App(props: AppProps) {
   const [showFps, setShowFps] = createSignal(false);
   const [fps, setFps] = createSignal(getFps());
   const [launching, setLaunching] = createSignal("");
-  const [emulatorStopped, setEmulatorStopped] = createSignal(false);\n  const [firmwareInfo, setFirmwareInfo] = createSignal<FirmwareManifest | null>(null);\n  const [firmwareStatus, setFirmwareStatus] = createSignal("No firmware folder imported.");\n  const [firmwareBusy, setFirmwareBusy] = createSignal(false);\n  let firmwarePicker: HTMLInputElement | undefined;
+  const [emulatorStopped, setEmulatorStopped] = createSignal(false);
+  const [firmwareInfo, setFirmwareInfo] = createSignal<FirmwareManifest | null>(null);
+  const [firmwareStatus, setFirmwareStatus] = createSignal("No firmware folder imported.");
+  const [firmwareBusy, setFirmwareBusy] = createSignal(false);\n  let firmwarePicker: HTMLInputElement | undefined;
 
   onMount(() => {
     const offLogs = subscribeLogs((entry) => {
