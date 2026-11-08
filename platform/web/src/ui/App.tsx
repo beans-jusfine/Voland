@@ -22,6 +22,86 @@ const demos = [
   { name: "Visual Diagnostic", file: "voland-visual-diagnostic.nro", detail: "Moving shapes and color patterns", art: "diagnostic", tag: "DIAGNOSTIC" },
 ];
 
+
+interface FirmwareManifest {
+  readonly fileCount: number;
+  readonly totalBytes: number;
+  readonly importedAt: string;
+  readonly sourceFolder: string;
+}
+
+async function firmwareDirectory(): Promise<FileSystemDirectoryHandle> {
+  if (!navigator.storage || typeof navigator.storage.getDirectory !== "function") {
+    throw new Error("This browser does not support local private file storage (OPFS).");
+  }
+  const root = await navigator.storage.getDirectory();
+  const voland = await root.getDirectoryHandle("voland", { create: true });
+  const system = await voland.getDirectoryHandle("system", { create: true });
+  return system.getDirectoryHandle("firmware", { create: true });
+}
+
+async function readFirmwareManifest(): Promise<FirmwareManifest | null> {
+  try {
+    const root = await navigator.storage.getDirectory();
+    const voland = await root.getDirectoryHandle("voland");
+    const system = await voland.getDirectoryHandle("system");
+    const handle = await system.getFileHandle("firmware-manifest.json");
+    return JSON.parse(await (await handle.getFile()).text()) as FirmwareManifest;
+  } catch {
+    return null;
+  }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / (1024 ** 2)).toFixed(1)} MB`;
+  return `${(bytes / (1024 ** 3)).toFixed(2)} GB`;
+}
+
+async function storeFirmwareFiles(files: FileList): Promise<FirmwareManifest> {
+  const selected = Array.from(files);
+  if (!selected.length) throw new Error("The selected folder contains no files.");
+  const totalBytes = selected.reduce((sum, file) => sum + file.size, 0);
+  const estimate = await navigator.storage.estimate();
+  if (estimate.quota !== undefined && estimate.usage !== undefined &&
+      totalBytes > estimate.quota - estimate.usage) {
+    throw new Error("There may not be enough browser storage space for this firmware dump.");
+  }
+  const target = await firmwareDirectory();
+  let sourceFolder = "Firmware folder";
+  for (const file of selected) {
+    const parts = (file.webkitRelativePath || file.name).split("/")
+      .filter((part) => part && part !== "." && part !== "..");
+    if (parts.length > 1) {
+      sourceFolder = parts[0];
+      parts.shift();
+    }
+    if (!parts.length) continue;
+    const filename = parts.pop()!;
+    let directory = target;
+    for (const part of parts) directory = await directory.getDirectoryHandle(part, { create: true });
+    const handle = await directory.getFileHandle(filename, { create: true });
+    const writable = await handle.createWritable();
+    await writable.write(file);
+    await writable.close();
+  }
+  const manifest: FirmwareManifest = {
+    fileCount: selected.length,
+    totalBytes,
+    importedAt: new Date().toISOString(),
+    sourceFolder,
+  };
+  const root = await navigator.storage.getDirectory();
+  const voland = await root.getDirectoryHandle("voland", { create: true });
+  const system = await voland.getDirectoryHandle("system", { create: true });
+  const handle = await system.getFileHandle("firmware-manifest.json", { create: true });
+  const writable = await handle.createWritable();
+  await writable.write(JSON.stringify(manifest, null, 2));
+  await writable.close();
+  return manifest;
+}
+
 function App(props: AppProps) {
   const [page, setPage] = createSignal<Page>("home");
   const [logs, setLogs] = createSignal<readonly LogEntry[]>(getLogHistory().slice());
@@ -30,7 +110,7 @@ function App(props: AppProps) {
   const [showFps, setShowFps] = createSignal(false);
   const [fps, setFps] = createSignal(getFps());
   const [launching, setLaunching] = createSignal("");
-  const [emulatorStopped, setEmulatorStopped] = createSignal(false);
+  const [emulatorStopped, setEmulatorStopped] = createSignal(false);\n  const [firmwareInfo, setFirmwareInfo] = createSignal<FirmwareManifest | null>(null);\n  const [firmwareStatus, setFirmwareStatus] = createSignal("No firmware folder imported.");\n  const [firmwareBusy, setFirmwareBusy] = createSignal(false);\n  let firmwarePicker: HTMLInputElement | undefined;
 
   onMount(() => {
     const offLogs = subscribeLogs((entry) => {
@@ -67,6 +147,41 @@ function App(props: AppProps) {
       appendLogLine("error", `launcher: ${(error as Error).message}`);
     } finally {
       setLaunching("");
+    }
+  }
+
+
+  async function importFirmware(files: FileList | null): Promise<void> {
+    if (!files?.length || firmwareBusy()) return;
+    setFirmwareBusy(true);
+    setFirmwareStatus("Importing firmware files into local browser storage…");
+    try {
+      const manifest = await storeFirmwareFiles(files);
+      setFirmwareInfo(manifest);
+      setFirmwareStatus("Import complete. Files remain on this device and are not uploaded.");
+      appendLogLine("info", `system: stored ${manifest.fileCount} firmware files (${formatBytes(manifest.totalBytes)}) locally`);
+    } catch (error) {
+      setFirmwareStatus((error as Error).message);
+      appendLogLine("error", `system firmware import: ${(error as Error).message}`);
+    } finally {
+      setFirmwareBusy(false);
+      if (firmwarePicker) firmwarePicker.value = "";
+    }
+  }
+
+  async function clearFirmware(): Promise<void> {
+    if (!window.confirm("Delete the locally stored firmware files from this browser?")) return;
+    try {
+      const root = await navigator.storage.getDirectory();
+      const voland = await root.getDirectoryHandle("voland", { create: true });
+      const system = await voland.getDirectoryHandle("system", { create: true });
+      await system.removeEntry("firmware", { recursive: true }).catch(() => undefined);
+      await system.removeEntry("firmware-manifest.json").catch(() => undefined);
+      setFirmwareInfo(null);
+      setFirmwareStatus("Local firmware storage cleared.");
+      appendLogLine("info", "system: removed locally stored firmware files");
+    } catch (error) {
+      setFirmwareStatus((error as Error).message);
     }
   }
 
@@ -139,7 +254,7 @@ function App(props: AppProps) {
       )}
 
       {page() === "settings" && (
-        <main class="voland-page"><div class="voland-page-heading"><div><p class="voland-eyebrow">CONSOLE CONFIGURATION</p><h1>Settings</h1><p>Current runtime information and build capabilities.</p></div></div><div class="voland-settings-grid"><div class="voland-setting-card"><span>PROCESSOR</span><strong>{props.cpuBackend}</strong><small>Active guest CPU backend</small></div><div class="voland-setting-card"><span>GRAPHICS</span><strong>{props.adapterLabel}</strong><small>Active WebGPU adapter</small></div><div class="voland-setting-card"><span>MEMORY</span><strong>{props.guestRamMiB} MiB</strong><small>Allocated guest RAM</small></div><div class="voland-setting-card"><span>RUNTIME</span><strong>{status()}</strong><small>Worker and emulator status</small></div></div><p class="voland-settings-note">More console settings will appear as Voland's system emulation develops.</p></main>
+        <main class="voland-page"><div class="voland-page-heading"><div><p class="voland-eyebrow">CONSOLE CONFIGURATION</p><h1>Settings</h1><p>Runtime information and locally stored system files.</p></div></div><div class="voland-settings-grid"><div class="voland-setting-card"><span>PROCESSOR</span><strong>{props.cpuBackend}</strong><small>Active guest CPU backend</small></div><div class="voland-setting-card"><span>GRAPHICS</span><strong>{props.adapterLabel}</strong><small>Active WebGPU adapter</small></div><div class="voland-setting-card"><span>MEMORY</span><strong>{props.guestRamMiB} MiB</strong><small>Allocated guest RAM</small></div><div class="voland-setting-card"><span>RUNTIME</span><strong>{status()}</strong><small>Worker and emulator status</small></div></div><section class="voland-system-panel"><div class="voland-panel-heading"><h2>System firmware</h2><span>{firmwareInfo() ? "STORED LOCALLY" : "NOT INSTALLED"}</span></div><p class="voland-system-copy">Import a firmware folder dumped from your own Switch. Voland stores the files in this browser's private local storage; nothing is sent to our servers or GitHub.</p><input ref={(el) => { firmwarePicker = el; el.setAttribute("webkitdirectory", ""); el.setAttribute("directory", ""); }} class="voland-hidden-input" type="file" multiple onChange={(event) => void importFirmware(event.currentTarget.files)} /><div class="voland-system-actions"><button class="voland-primary-button" type="button" disabled={firmwareBusy()} onClick={() => firmwarePicker?.click()}>{firmwareBusy() ? "IMPORTING…" : "＋ IMPORT FIRMWARE FOLDER"}</button>{firmwareInfo() && <button class="voland-secondary-button" type="button" disabled={firmwareBusy()} onClick={() => void clearFirmware()}>CLEAR LOCAL FILES</button>}</div><p class="voland-system-status">{firmwareStatus()}</p>{firmwareInfo() && <div class="voland-firmware-stats"><span><strong>{firmwareInfo()!.fileCount}</strong> files</span><span><strong>{formatBytes(firmwareInfo()!.totalBytes)}</strong> stored</span><span>Imported {new Date(firmwareInfo()!.importedAt).toLocaleString()}</span></div>}<div class="voland-key-note"><strong>About prod.keys</strong><p>Voland does not import or use prod.keys and does not decrypt encrypted NSP/XCI files. Use your own tools to prepare pre-decrypted game files; Voland will only load supported, pre-decrypted content. Keys are never requested or uploaded.</p></div><p class="voland-settings-note">Firmware storage is implemented as a local import step. The emulator does not consume firmware yet; system-service integration is still under development.</p></section></main>
       )}
     </div>
   );
