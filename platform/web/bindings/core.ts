@@ -19,6 +19,7 @@ export interface SwitchCoreExports {
   readonly _emulator_run_ffi:     (cycleBudget: bigint) => number; /* CPU_ExitReason */
   readonly _emulator_step_ffi:    () => number;                    /* CPU_ExitReason */
   readonly _emulator_load_nro_ffi: (dataPtr: number, size: number) => number;
+  readonly _emulator_publish_demo_frame_ffi: () => number;
   readonly _malloc: (size: number) => number;
   readonly _free: (ptr: number) => void;
   readonly _emulator_set_paused_ffi: (paused: number) => number;   /* 1 success, 0 failure */

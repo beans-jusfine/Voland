@@ -1,142 +1,102 @@
 /**
- * GPU rendering worker. Phase 0 display milestone: acquire WebGPU and draw
- * a visible diagnostic pattern to the transferred canvas. Guest Maxwell
- * command buffers and framebuffer presentation are still future work.
+ * WebGPU presenter for Voland's shared double-buffered RGBA8 framebuffer.
  */
 import type { MemoryLayout } from "@bindings/layout";
 import type { GPUToMainMessage, MainToGPUMessage } from "@bindings/protocol";
-
-const self: DedicatedWorkerGlobalScope =
-  globalThis as unknown as DedicatedWorkerGlobalScope;
-
+const self: DedicatedWorkerGlobalScope = globalThis as unknown as DedicatedWorkerGlobalScope;
 function log(level: "debug" | "info" | "warn" | "error", message: string): void {
-  const msg: GPUToMainMessage = { type: "log", level, message };
-  self.postMessage(msg);
+  self.postMessage({ type: "log", level, message } satisfies GPUToMainMessage);
 }
-
-const DISPLAY_WIDTH = 1280;
-const DISPLAY_HEIGHT = 720;
-
-const DISPLAY_SHADER = /* wgsl */ `
-struct VertexOutput {
-  @builtin(position) position: vec4f,
-};
-
+const WIDTH = 1280, HEIGHT = 720;
+const HEADER_BYTES = 128, MAX_WIDTH = 1920, MAX_HEIGHT = 1080;
+const SLOT_BYTES = MAX_WIDTH * MAX_HEIGHT * 4;
+const SHADER = `
+struct VertexOutput { @builtin(position) position: vec4f, };
+@group(0) @binding(0) var frameTexture: texture_2d<f32>;
+@group(0) @binding(1) var frameSampler: sampler;
 @vertex
-fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
-  var positions = array<vec2f, 3>(
-    vec2f(-1.0, -1.0),
-    vec2f( 3.0, -1.0),
-    vec2f(-1.0,  3.0)
-  );
-  var output: VertexOutput;
-  output.position = vec4f(positions[vertexIndex], 0.0, 1.0);
-  return output;
+fn vertexMain(@builtin(vertex_index) index: u32) -> VertexOutput {
+  var positions = array<vec2f, 3>(vec2f(-1.0,-1.0),vec2f(3.0,-1.0),vec2f(-1.0,3.0));
+  var output: VertexOutput; output.position = vec4f(positions[index],0.0,1.0); return output;
 }
-
 @fragment
 fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
-  let uv = position.xy / vec2f(1280.0, 720.0);
-  let glow = 0.5 + 0.5 * sin(uv.x * 5.0 + uv.y * 3.0);
-  var color = mix(
-    vec3f(0.018, 0.025, 0.065),
-    vec3f(0.055, 0.025, 0.105),
-    uv.y
-  );
-
-  let gridX = 1.0 - smoothstep(0.0, 0.012, abs(fract(uv.x * 16.0) - 0.5));
-  let gridY = 1.0 - smoothstep(0.0, 0.012, abs(fract(uv.y * 9.0) - 0.5));
-  color += vec3f(0.025, 0.045, 0.085) * max(gridX, gridY) * 0.28;
-
-  let circleA = 1.0 - smoothstep(0.105, 0.112, distance(uv, vec2f(0.25, 0.48)));
-  let circleB = 1.0 - smoothstep(0.075, 0.082, distance(uv, vec2f(0.73, 0.38)));
-  let circleC = 1.0 - smoothstep(0.052, 0.059, distance(uv, vec2f(0.64, 0.72)));
-  color = mix(color, vec3f(0.08, 0.58, 1.0), circleA);
-  color = mix(color, vec3f(0.72, 0.22, 1.0), circleB);
-  color = mix(color, vec3f(0.12, 0.92, 0.72), circleC);
-
-  let bar = step(0.18, uv.x) * step(0.76, uv.y)
-          * step(uv.y, 0.79) * step(uv.x, 0.46);
-  color = mix(color, vec3f(0.15, 0.48, 0.95) * (0.65 + glow * 0.35), bar);
-
-  let marker = step(0.82, uv.x) * step(0.78, uv.y)
-             * step(uv.y, 0.80) * step(uv.x, 0.84);
-  color = mix(color, vec3f(0.35, 0.95, 0.78), marker);
-
-  return vec4f(color, 1.0);
-}
-`;
-
+  let uv = position.xy / vec2f(1280.0,720.0);
+  return textureSample(frameTexture,frameSampler,uv);
+}`;
 async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout: MemoryLayout): Promise<void> {
-  log("debug", `layout handshake: framebufferSlotBase=0x${layout.framebufferSlotBase.toString(16)}`);
-  void memory; // guest framebuffer-slot presentation arrives with Maxwell emulation
-
-  if (!("gpu" in navigator)) {
-    const err: GPUToMainMessage = { type: "error", message: "WebGPU unavailable inside worker" };
-    self.postMessage(err);
-    return;
-  }
-
+  if (!("gpu" in navigator)) throw new Error("WebGPU unavailable inside worker");
   const gpu = (navigator as Navigator & { gpu: GPU }).gpu;
   const adapter = await gpu.requestAdapter();
-  if (!adapter) {
-    const err: GPUToMainMessage = { type: "error", message: "requestAdapter() returned null" };
-    self.postMessage(err);
-    return;
-  }
-
+  if (!adapter) throw new Error("requestAdapter() returned null");
   const device = await adapter.requestDevice();
-  canvas.width = DISPLAY_WIDTH;
-  canvas.height = DISPLAY_HEIGHT;
+  canvas.width = WIDTH; canvas.height = HEIGHT;
   const context = canvas.getContext("webgpu") as GPUCanvasContext | null;
-  if (!context) {
-    const err: GPUToMainMessage = { type: "error", message: "getContext('webgpu') returned null" };
-    self.postMessage(err);
-    return;
-  }
-
+  if (!context) throw new Error("getContext('webgpu') returned null");
   const format = gpu.getPreferredCanvasFormat();
   context.configure({ device, format, alphaMode: "opaque" });
-
-  const shader = device.createShaderModule({ label: "Voland display test shader", code: DISPLAY_SHADER });
+  const texture = device.createTexture({
+    label: "Voland shared framebuffer", size: { width: WIDTH, height: HEIGHT },
+    format: "rgba8unorm", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  const sampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
+  const shader = device.createShaderModule({ label: "Voland framebuffer blit", code: SHADER });
   const pipeline = device.createRenderPipeline({
-    label: "Voland display test pipeline",
-    layout: "auto",
+    label: "Voland framebuffer presentation pipeline", layout: "auto",
     vertex: { module: shader, entryPoint: "vertexMain" },
     fragment: { module: shader, entryPoint: "fragmentMain", targets: [{ format }] },
     primitive: { topology: "triangle-list" },
   });
-
-  const encoder = device.createCommandEncoder();
-  const pass = encoder.beginRenderPass({
-    colorAttachments: [{
-      view: context.getCurrentTexture().createView(),
-      clearValue: { r: 0.02, g: 0.02, b: 0.05, a: 1 },
-      loadOp: "clear",
-      storeOp: "store",
-    }],
+  const bindGroup = device.createBindGroup({
+    layout: pipeline.getBindGroupLayout(0),
+    entries: [{ binding: 0, resource: texture.createView() }, { binding: 1, resource: sampler }],
   });
-  pass.setPipeline(pipeline);
-  pass.draw(3);
-  pass.end();
-  device.queue.submit([encoder.finish()]);
-
-  log(`info`, `WebGPU display test rendered (${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}), format=${format}`);
-  const ready: GPUToMainMessage = {
+  const base = layout.framebufferSlotBase;
+  const counters = new Uint32Array(memory.buffer, base, 2);
+  let presented = 0;
+  const draw = () => {
+    const encoder = device.createCommandEncoder();
+    const pass = encoder.beginRenderPass({ colorAttachments: [{
+      view: context.getCurrentTexture().createView(),
+      clearValue: { r: 0.015, g: 0.018, b: 0.03, a: 1 }, loadOp: "clear", storeOp: "store",
+    }] });
+    pass.setPipeline(pipeline); pass.setBindGroup(0, bindGroup); pass.draw(3); pass.end();
+    device.queue.submit([encoder.finish()]);
+  };
+  const poll = () => {
+    const published = Atomics.load(counters, 0);
+    if (published !== 0 && published !== presented) {
+      const slot = (published - 1) & 1;
+      const metadata = new DataView(memory.buffer, base + 8 + slot * 16, 16);
+      const width = metadata.getUint32(0, true), height = metadata.getUint32(4, true);
+      const pixelFormat = metadata.getUint32(8, true), byteLength = metadata.getUint32(12, true);
+      if (width > 0 && width <= MAX_WIDTH && height > 0 && height <= MAX_HEIGHT &&
+          pixelFormat === 1 && byteLength === width * height * 4 && byteLength <= SLOT_BYTES) {
+        const offset = base + HEADER_BYTES + slot * SLOT_BYTES;
+        const pixels = new Uint8Array(memory.buffer, offset, byteLength);
+        device.queue.writeTexture({ texture }, pixels,
+          { offset: 0, bytesPerRow: width * 4, rowsPerImage: height },
+          { width, height, depthOrArrayLayers: 1 });
+        presented = published;
+        Atomics.store(counters, 1, published);
+        draw();
+        log("info", `presented shared framebuffer frame ${published} (${width}x${height}, RGBA8)`);
+      } else {
+        log("error", `rejected framebuffer metadata: ${width}x${height}, format=${pixelFormat}, bytes=${byteLength}`);
+        presented = published;
+      }
+    }
+    self.setTimeout(poll, 16);
+  };
+  draw(); poll();
+  log("info", `WebGPU shared framebuffer presenter ready (${WIDTH}x${HEIGHT})`);
+  self.postMessage({
     type: "ready",
     adapterName: ((adapter as unknown as { info?: { vendor?: string } }).info?.vendor) ?? null,
-  };
-  self.postMessage(ready);
+  } satisfies GPUToMainMessage);
 }
-
 self.addEventListener("message", (event: MessageEvent<MainToGPUMessage>) => {
-  if (event.data.type === "init") {
-    init(event.data.canvas, event.data.memory, event.data.layout).catch((e: unknown) => {
-      const err: GPUToMainMessage = {
-        type: "error",
-        message: `init threw: ${e instanceof Error ? e.message : String(e)}`,
-      };
-      self.postMessage(err);
-    });
-  }
+  if (event.data.type === "init") init(event.data.canvas, event.data.memory, event.data.layout).catch((error: unknown) => {
+    self.postMessage({ type: "error", message: `init threw: ${error instanceof Error ? error.message : String(error)}` } satisfies GPUToMainMessage);
+  });
 });

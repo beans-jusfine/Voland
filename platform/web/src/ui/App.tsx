@@ -50,7 +50,7 @@ function App(props: AppProps) {
           <div class="voland-section-heading">
             <div>
               <h1>Emulator display</h1>
-              <p>Guest graphics will appear here when framebuffer output is connected.</p>
+              <p>Newly published RGBA8 frames from shared WASM memory appear here.</p>
             </div>
             <span class="voland-display-state">GPU</span>
           </div>
@@ -83,7 +83,7 @@ function App(props: AppProps) {
             <button class="voland-load-button" type="button" disabled={!selectedNro()}
               onClick={() => { const file = selectedNro(); if (file) props.onLoadNro(file); }}>Load NRO</button>
             <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-demo.nro`} download="voland-demo.nro">Download Voland demo NRO</a>
-            <p class="voland-loader-note">The current demo verifies ARM64 execution only. It does not draw guest graphics yet.</p>
+            <p class="voland-loader-note">The current demo verifies ARM64 execution; Voland seeds a host-generated framebuffer test image after it loads. Guest-generated graphics are not wired up yet.</p>
           </section>
 
           <section class="voland-panel voland-log">
