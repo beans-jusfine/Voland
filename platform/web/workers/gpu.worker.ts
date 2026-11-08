@@ -35,7 +35,7 @@ async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout:
   if (!context) throw new Error("getContext('webgpu') returned null");
   const format = gpu.getPreferredCanvasFormat();
   context.configure({ device, format, alphaMode: "opaque" });
-  let texture: GPUTexture;
+  let texture: GPUTexture | null = null;
   let textureWidth = 0;
   let textureHeight = 0;
   const sampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
@@ -46,7 +46,7 @@ async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout:
     fragment: { module: shader, entryPoint: "fragmentMain", targets: [{ format }] },
     primitive: { topology: "triangle-list" },
   });
-  let bindGroup: GPUBindGroup;
+  let bindGroup: GPUBindGroup | null = null;
   const ensureTexture = (width: number, height: number) => {
     if (textureWidth === width && textureHeight === height) return;
     if (texture) texture.destroy();
@@ -73,6 +73,7 @@ async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout:
       view: context.getCurrentTexture().createView(),
       clearValue: { r: 0.015, g: 0.018, b: 0.03, a: 1 }, loadOp: "clear", storeOp: "store",
     }] });
+    if (!bindGroup) { pass.end(); return; }
     pass.setPipeline(pipeline); pass.setBindGroup(0, bindGroup); pass.draw(3); pass.end();
     device.queue.submit([encoder.finish()]);
   };
@@ -86,6 +87,7 @@ async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout:
       if (width > 0 && width <= MAX_WIDTH && height > 0 && height <= MAX_HEIGHT &&
           pixelFormat === 1 && byteLength === width * height * 4 && byteLength <= SLOT_BYTES) {
         ensureTexture(width, height);
+        if (!texture) return;
         const offset = base + HEADER_BYTES + slot * SLOT_BYTES;
         const pixels = new Uint8Array(memory.buffer, offset, byteLength);
         device.queue.writeTexture({ texture }, pixels,

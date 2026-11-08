@@ -17,7 +17,7 @@ def movk_w16(imm):
 def str_w(byte_off):
     return 0xb9000000 | (((byte_off // 4) & 0xfff) << 10) | (1 << 5)
 
-instructions = [0x90000021, 0x91000021]  # ADRP X1, data; ADD X1, X1, #0
+instructions = [0x90000041, 0x91000021]  # ADRP X1, data; ADD X1, X1, #0
 for y in range(H):
     for x in range(W):
         dx, dy = x - 15.5, y - 15.5
