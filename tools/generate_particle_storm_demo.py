@@ -11,6 +11,7 @@ FB_HEADER_SIZE = 16
 DATA_SIZE = FB_HEADER_SIZE + W * H * 4
 FRAME_COUNT = 24
 PARTICLE_COUNT = 100
+CHUNK_PIXELS = 4096
 
 
 def align(value, alignment):
@@ -25,13 +26,25 @@ def movk_w16(imm):
     return 0x72a00000 | ((imm & 0xffff) << 5)
 
 
-def str_w(byte_off):
-    return 0xb9000000 | (((byte_off // 4) & 0xfff) << 10) | (1 << 5)
+def str_w(pixel_index):
+    # STR W0, [X1, #pixel_index * 4]; imm12 is scaled by four.
+    if not 0 <= pixel_index < CHUNK_PIXELS:
+        raise ValueError("STR offset exceeds the scaled 12-bit immediate")
+    return 0xb9000000 | ((pixel_index & 0xfff) << 10) | (1 << 5)
 
 
-def adrp_x1(page_delta):
+def adrp_x(reg, page_delta):
     imm = page_delta & 0x1fffff
-    return 0x90000001 | ((imm & 3) << 29) | (((imm >> 2) & 0x7ffff) << 5)
+    return 0x90000000 | ((imm & 3) << 29) | (((imm >> 2) & 0x7ffff) << 5) | reg
+
+
+def add_x_imm(rd, rn, imm12, shift12=False):
+    return 0x91000000 | (int(shift12) << 22) | ((imm12 & 0xfff) << 10) | (rn << 5) | rd
+
+
+def mov_x1_x20():
+    # ORR X1, XZR, X20 (MOV X1, X20).
+    return 0xaa1403e1
 
 
 def rgba(r, g, b):
@@ -70,10 +83,14 @@ frame_blocks = []
 for frame in range(FRAME_COUNT):
     instructions = []
     if frame == 0:
-        instructions.extend((0, 0))  # ADRP X1; ADD X1, X1, #16
+        instructions.extend((0, 0))  # ADRP X20; ADD X20, X20, #16
+    instructions.append(mov_x1_x20())
     for index, pixel in enumerate(render_frame(frame)):
-        instructions.extend((movz_w(pixel), movk_w16(pixel >> 16),
-                             str_w(FB_HEADER_SIZE + index * 4)))
+        local_index = index % CHUNK_PIXELS
+        instructions.extend((movz_w(pixel), movk_w16(pixel >> 16), str_w(local_index)))
+        if local_index == CHUNK_PIXELS - 1 and index + 1 < W * H:
+            # Advance X1 by 16 KiB, then restart the scaled STR offset at zero.
+            instructions.append(add_x_imm(1, 1, 4, shift12=True))
     if len(instructions) + 1 > FRAME_INSTRUCTIONS:
         raise RuntimeError("frame drawing code exceeds its instruction budget")
     instructions.extend([0xd503201f] * (FRAME_INSTRUCTIONS - len(instructions) - 1))
@@ -83,8 +100,8 @@ for frame in range(FRAME_COUNT):
 TEXT_SIZE = FRAME_COUNT * FRAME_INSTRUCTIONS * 4
 DATA_OFF = align(TEXT_OFF + TEXT_SIZE, 0x1000)
 page_delta = (DATA_OFF - TEXT_OFF) // 0x1000
-frame_blocks[0][0] = adrp_x1(page_delta)
-frame_blocks[0][1] = 0x91004021  # ADD X1, X1, #16
+frame_blocks[0][0] = adrp_x(20, page_delta)
+frame_blocks[0][1] = add_x_imm(20, 20, FB_HEADER_SIZE)
 
 for frame, block in enumerate(frame_blocks):
     branch_word = frame * FRAME_INSTRUCTIONS + FRAME_INSTRUCTIONS - 1

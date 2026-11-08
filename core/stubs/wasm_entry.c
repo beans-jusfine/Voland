@@ -80,7 +80,8 @@ static void publish_guest_frame_if_ready(void) {
   if (!layout) return;
   uint8_t *region = (uint8_t *)(uintptr_t)layout->framebuffer_slot_base;
   _Atomic uint32_t *publish = (_Atomic uint32_t *)(void *)region;
-  const uint32_t next = atomic_load_explicit(publish, memory_order_relaxed) + 1u;
+  const uint32_t current = atomic_load_explicit(publish, memory_order_acquire);
+  const uint32_t next = current + 1u;
   const uint32_t slot = (next - 1u) & 1u;
   uint32_t *metadata = (uint32_t *)(void *)(region + 8u + slot * 16u);
   uint8_t *pixels = region + FRAMEBUFFER_HEADER_BYTES + (uint64_t)slot * FRAMEBUFFER_SLOT_BYTES;
@@ -89,6 +90,14 @@ static void publish_guest_frame_if_ready(void) {
   if (read.code != RESULT_OK) {
     log_error("[wasm_entry] could not read guest framebuffer: %s", read.message);
     return;
+  }
+  /* Only publish a genuinely changed guest image. The web FPS counter is
+   * based on publication IDs, so unchanged scheduler ticks must not count. */
+  if (current != 0u) {
+    const uint32_t previous_slot = (current - 1u) & 1u;
+    const uint8_t *previous = region + FRAMEBUFFER_HEADER_BYTES +
+                              (uint64_t)previous_slot * FRAMEBUFFER_SLOT_BYTES;
+    if (memcmp(previous, pixels, (size_t)byte_length) == 0) return;
   }
   metadata[0] = width;
   metadata[1] = height;
