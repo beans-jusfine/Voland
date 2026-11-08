@@ -34,7 +34,7 @@ jobs:
         with:
           version: ${{ env.EMSDK_VERSION }}
       - name: Configure WebAssembly core
-        run: cmake --preset web -DCPU_BACKEND=interpreter -DVOLAND_WEB_MEMORY_PAGES=24576 -DVOLAND_WEB_GUEST_RAM_MIB=512
+        run: cmake --preset web -DVOLAND_WEB_MEMORY_PAGES=24576 -DVOLAND_WEB_GUEST_RAM_MIB=512
       - name: Build WebAssembly core
         run: cmake --build --preset web
       - name: Upload WebAssembly core
