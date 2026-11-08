@@ -169,7 +169,7 @@ int main(void) {
   CHECK(backend->get_reg(state, 4) == 1);
   CHECK(backend->get_reg(state, 5) == 33);
   CHECK(backend->get_reg(state, 6) == 0);
-  CHECK(backend->get_reg(state, 7) == 0);
+  CHECK(backend->get_reg(state, 7) == 33);
   CHECK(backend->get_reg(state, 8) == 1);
 
   const uint32_t signed_division_program[] = {
