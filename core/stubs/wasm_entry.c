@@ -32,6 +32,7 @@ EXPORT int emulator_create_ffi(void);
 EXPORT void emulator_destroy_ffi(void);
 EXPORT int emulator_run_ffi(uint64_t cycle_budget);
 EXPORT int emulator_step_ffi(void);
+EXPORT int emulator_set_paused_ffi(int paused);
 EXPORT uint64_t cpu_get_reg_ffi(uint32_t index);
 EXPORT void cpu_set_reg_ffi(uint32_t index, uint64_t value);
 EXPORT uint64_t cpu_get_pc_ffi(void);
@@ -70,6 +71,17 @@ EXPORT int emulator_run_ffi(uint64_t cycle_budget)
   if (!g_initialised)
     return -1;
   return (int)emulator_run(&g_emulator, cycle_budget);
+}
+
+EXPORT int emulator_set_paused_ffi(int paused)
+{
+  if (!g_initialised) return 0;
+  const Error err = emulator_set_paused(&g_emulator, paused != 0);
+  if (err.code != RESULT_OK) {
+    log_error("[wasm_entry] scheduler pause change failed: %s", err.message);
+    return 0;
+  }
+  return 1;
 }
 
 EXPORT int emulator_step_ffi(void)

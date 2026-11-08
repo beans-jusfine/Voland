@@ -33,5 +33,6 @@ Error scheduler_remove_thread(Scheduler *scheduler,uint64_t id);
 Error scheduler_set_paused(Scheduler *scheduler,bool paused);
 bool scheduler_is_paused(const Scheduler *scheduler);
 Scheduler_Tick_Result scheduler_tick(Scheduler *scheduler);
+Scheduler_Tick_Result scheduler_tick_budget(Scheduler *scheduler,uint64_t cycle_budget);
 const Scheduler_Thread *scheduler_find_thread(const Scheduler *scheduler,uint64_t id);
 #endif

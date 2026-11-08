@@ -35,6 +35,13 @@ Error emulator_create(Emulator* out) {
    * raw guest RAM (§8). */
   out->cpu_backend = cpu_get_active_backend();
   SWITCH_ASSERT_ALWAYS(out->cpu_backend != NULL, "no CPU backend registered");
+  const Error scheduler_err = scheduler_init(&out->scheduler, out->cpu_backend);
+  if (!error_is_ok(scheduler_err)) {
+    vmm_destroy(out->vmm);
+    layout_destroy();
+    memset(out, 0, sizeof(*out));
+    return scheduler_err;
+  }
 
   out->cpu_state = out->cpu_backend->create(out->vmm, &out->hle);
   if (!out->cpu_state) {
@@ -161,6 +168,16 @@ Error emulator_load_program(Emulator* emulator, const Byte_Source* nca_source,
     page_allocator_reset(&emulator->pages);
     return err;
   }
+  const uint32_t main_core = emulator->process.npdm.main_thread_core_number < SCHEDULER_VIRTUAL_CORE_COUNT
+      ? emulator->process.npdm.main_thread_core_number : 0u;
+  err = scheduler_add_thread(&emulator->scheduler, emulator->cpu_state,
+      emulator->process.npdm.main_thread_priority, main_core,
+      SCHEDULER_ALL_CORE_AFFINITY, &emulator->main_thread_scheduler_id);
+  if (!error_is_ok(err)) {
+    process_teardown(&emulator->process, emulator->vmm, &emulator->pages);
+    page_allocator_reset(&emulator->pages);
+    return err;
+  }
   emulator->program_loaded = true;
   log_info("[emulator] program '%s' loaded; main thread armed at pc=0x%010llx",
            emulator->process.npdm.name, (unsigned long long)emulator->process.entry_point);
@@ -169,6 +186,8 @@ Error emulator_load_program(Emulator* emulator, const Byte_Source* nca_source,
 
 void emulator_unload_program(Emulator* emulator) {
   if (!emulator || !emulator->program_loaded) return;
+  (void)scheduler_remove_thread(&emulator->scheduler, emulator->main_thread_scheduler_id);
+  emulator->main_thread_scheduler_id = 0;
   process_teardown(&emulator->process, emulator->vmm, &emulator->pages);
   page_allocator_reset(&emulator->pages);
   hle_reset_process_state(&emulator->hle);
@@ -177,7 +196,18 @@ void emulator_unload_program(Emulator* emulator) {
 
 CPU_ExitReason emulator_run(Emulator* emulator, uint64_t cycle_budget) {
   SWITCH_ASSERT_ALWAYS(emulator != NULL, "emulator_run: emulator is NULL");
-  return emulator->cpu_backend->run(emulator->cpu_state, cycle_budget);
+  if (!emulator->program_loaded) return CPU_EXIT_CYCLES_ELAPSED;
+  return scheduler_tick_budget(&emulator->scheduler, cycle_budget).last_exit_reason;
+}
+
+Error emulator_set_paused(Emulator *emulator,bool paused) {
+  if (!emulator || !emulator->cpu_backend)
+    return ERR(RESULT_INVALID_ARGUMENT, "emulator_set_paused: invalid emulator");
+  return scheduler_set_paused(&emulator->scheduler, paused);
+}
+
+bool emulator_is_paused(const Emulator *emulator) {
+  return emulator && scheduler_is_paused(&emulator->scheduler);
 }
 
 CPU_ExitReason emulator_step(Emulator* emulator) {

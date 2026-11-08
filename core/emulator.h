@@ -16,6 +16,7 @@
 #include "hle/hle.h"
 #include "hle/kernel/page_allocator.h"
 #include "hle/kernel/process.h"
+#include "hle/kernel/scheduler.h"
 #include "hle/loader/byte_source.h"
 #include "hle/services/sm/sm.h"
 
@@ -35,6 +36,8 @@ typedef struct Emulator
   /* One CPU_State stands in for "the" guest thread until the Phase 2
    * scheduler (§7) exists to multiplex real ones. */
   CPU_State *cpu_state;
+  Scheduler scheduler;
+  uint64_t main_thread_scheduler_id;
   HLE_Context hle;
 
   /* sm:'s host-side registry (sm.h). Outlives any one program load - a
@@ -74,10 +77,12 @@ Error emulator_load_program(Emulator *emulator, const Byte_Source *nca, uint64_t
  * loaded. */
 void emulator_unload_program(Emulator *emulator);
 
-/* Runs the single CPU_State for at most `cycle_budget` cycles and reports
- * why it stopped. This is a direct pass-through to the active backend;
- * `run(entry_point)`-until-done does not exist in the interface (§7/§8). */
+/* Runs one bounded scheduler quantum across runnable guest threads. */
 CPU_ExitReason emulator_run(Emulator *emulator, uint64_t cycle_budget);
+
+/* Freeze or resume scheduler dispatch without discarding thread state. */
+Error emulator_set_paused(Emulator *emulator,bool paused);
+bool emulator_is_paused(const Emulator *emulator);
 
 /* Single-step. */
 CPU_ExitReason emulator_step(Emulator *emulator);

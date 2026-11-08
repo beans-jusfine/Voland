@@ -18,6 +18,7 @@ export interface SwitchCoreExports {
   readonly _emulator_destroy_ffi: () => void;
   readonly _emulator_run_ffi:     (cycleBudget: bigint) => number; /* CPU_ExitReason */
   readonly _emulator_step_ffi:    () => number;                    /* CPU_ExitReason */
+  readonly _emulator_set_paused_ffi: (paused: number) => number;   /* 1 success, 0 failure */
 
   readonly _layout_get_ffi:      () => number; /* Memory_Layout* in linear memory */
   readonly _cpu_backend_id_ffi:  () => number; /* CpuBackendId */

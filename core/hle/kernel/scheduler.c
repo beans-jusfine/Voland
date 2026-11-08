@@ -16,7 +16,38 @@ Error scheduler_remove_thread(Scheduler *s,uint64_t id){Scheduler_Thread *t=find
 Error scheduler_set_paused(Scheduler *s,bool paused){if(!s||!s->backend)return ERR(RESULT_INVALID_ARGUMENT,"scheduler_set_paused: invalid scheduler");s->paused=paused;return OK;}
 bool scheduler_is_paused(const Scheduler *s){return s&&s->paused;}
 static Scheduler_Thread *pick_thread(Scheduler *s,uint32_t core){Scheduler_Thread *best=NULL;uint32_t best_slot=0;for(uint32_t n=0;n<SCHEDULER_MAX_THREADS;n++){uint32_t slot=(s->tie_cursor[core]+n)%SCHEDULER_MAX_THREADS;Scheduler_Thread *t=&s->threads[slot];if(!t->cpu_state||t->run_state!=THREAD_RUN_RUNNABLE||t->last_scheduled_round==s->round||!(t->affinity_mask&(UINT64_C(1)<<core)))continue;bool candidate_ideal=t->ideal_core==(int32_t)core;bool best_ideal=best&&best->ideal_core==(int32_t)core;if(!best||(candidate_ideal&&!best_ideal)||(candidate_ideal==best_ideal&&t->priority<best->priority)){best=t;best_slot=slot;}}if(best)s->tie_cursor[core]=(best_slot+1)%SCHEDULER_MAX_THREADS;return best;}
-Scheduler_Tick_Result scheduler_tick(Scheduler *s){Scheduler_Tick_Result r;memset(&r,0,sizeof(r));r.last_exit_reason=CPU_EXIT_CYCLES_ELAPSED;if(!s||!s->backend)return r;r.virtual_time_cycles=s->virtual_time_cycles;if(s->paused){r.idle_cores=SCHEDULER_VIRTUAL_CORE_COUNT;return r;}s->round++;if(!s->round){s->round=1;for(uint32_t i=0;i<SCHEDULER_MAX_THREADS;i++)s->threads[i].last_scheduled_round=0;}
- for(uint32_t i=0;i<SCHEDULER_MAX_THREADS;i++){Scheduler_Thread *t=&s->threads[i];if(t->cpu_state&&t->run_state==THREAD_RUN_SLEEPING&&t->wake_at_vt<=s->virtual_time_cycles){t->run_state=THREAD_RUN_RUNNABLE;t->wake_at_vt=0;}}
- for(uint32_t core=0;core<3;core++){Scheduler_Thread *t=pick_thread(s,core);if(!t){r.idle_cores++;continue;}r.cores_run++;t->last_scheduled_round=s->round;t->current_core=core;uint64_t remaining=SCHEDULER_QUANTUM_CYCLES;while(remaining&&t->run_state==THREAD_RUN_RUNNABLE){CPU_ExitReason why=s->backend->run(t->cpu_state,remaining);uint64_t used=s->backend->get_cycles_consumed(t->cpu_state);t->last_exit_reason=why;r.last_exit_reason=why;r.did_work=true;t->cycles_executed+=used;r.guest_cycles_executed+=used;if(used>=remaining)remaining=0;else remaining-=used;if(why==CPU_EXIT_FAULT||why==CPU_EXIT_HALT){t->run_state=THREAD_RUN_DEAD;if(why==CPU_EXIT_FAULT)r.faulted_threads++;break;}if(why==CPU_EXIT_BREAKPOINT||why==CPU_EXIT_CYCLES_ELAPSED||!used||(why==CPU_EXIT_SVC&&t->run_state!=THREAD_RUN_RUNNABLE))break;}}
- if(UINT64_MAX-s->virtual_time_cycles>=SCHEDULER_QUANTUM_CYCLES)s->virtual_time_cycles+=SCHEDULER_QUANTUM_CYCLES;r.virtual_time_cycles=s->virtual_time_cycles;if(r.idle_cores==3)r.did_work=false;return r;}
+
+Scheduler_Tick_Result scheduler_tick_budget(Scheduler *s,uint64_t cycle_budget){
+ Scheduler_Tick_Result r;memset(&r,0,sizeof(r));r.last_exit_reason=CPU_EXIT_CYCLES_ELAPSED;
+ if(!s||!s->backend||!cycle_budget)return r;
+ r.virtual_time_cycles=s->virtual_time_cycles;
+ if(s->paused){r.idle_cores=SCHEDULER_VIRTUAL_CORE_COUNT;return r;}
+ s->round++;if(!s->round){s->round=1;for(uint32_t i=0;i<SCHEDULER_MAX_THREADS;i++)s->threads[i].last_scheduled_round=0;}
+ for(uint32_t i=0;i<SCHEDULER_MAX_THREADS;i++){
+  Scheduler_Thread *t=&s->threads[i];
+  if(t->cpu_state&&t->run_state==THREAD_RUN_SLEEPING&&t->wake_at_vt<=s->virtual_time_cycles){t->run_state=THREAD_RUN_RUNNABLE;t->wake_at_vt=0;}
+ }
+ for(uint32_t core=0;core<SCHEDULER_VIRTUAL_CORE_COUNT;core++){
+  Scheduler_Thread *t=pick_thread(s,core);
+  if(!t){r.idle_cores++;continue;}
+  r.cores_run++;t->last_scheduled_round=s->round;t->current_core=core;
+  uint64_t remaining=cycle_budget;
+  while(remaining&&t->run_state==THREAD_RUN_RUNNABLE){
+   CPU_ExitReason why=s->backend->run(t->cpu_state,remaining);
+   uint64_t used=s->backend->get_cycles_consumed(t->cpu_state);
+   t->last_exit_reason=why;r.last_exit_reason=why;r.did_work=true;
+   t->cycles_executed+=used;r.guest_cycles_executed+=used;
+   if(used>=remaining)remaining=0;else remaining-=used;
+   if(why==CPU_EXIT_FAULT||why==CPU_EXIT_HALT){
+    t->run_state=THREAD_RUN_DEAD;if(why==CPU_EXIT_FAULT)r.faulted_threads++;break;
+   }
+   if(why==CPU_EXIT_BREAKPOINT||why==CPU_EXIT_CYCLES_ELAPSED||!used||
+      (why==CPU_EXIT_SVC&&t->run_state!=THREAD_RUN_RUNNABLE))break;
+  }
+ }
+ if(UINT64_MAX-s->virtual_time_cycles>=cycle_budget)s->virtual_time_cycles+=cycle_budget;
+ r.virtual_time_cycles=s->virtual_time_cycles;
+ if(r.idle_cores==SCHEDULER_VIRTUAL_CORE_COUNT)r.did_work=false;
+ return r;
+}
+Scheduler_Tick_Result scheduler_tick(Scheduler *s){return scheduler_tick_budget(s,SCHEDULER_QUANTUM_CYCLES);}

@@ -40,6 +40,25 @@ async function loadCoreModule(memory: WebAssembly.Memory): Promise<SwitchCoreExp
 }
 
 let core: SwitchCoreExports | null = null;
+let paused = false;
+let halted = false;
+let tickScheduled = false;
+const SCHEDULER_CYCLE_BUDGET = 10_000n;
+const WORKER_TICK_INTERVAL_MS = 16;
+
+function scheduleExecutionTick(): void {
+  if (tickScheduled || halted || !core) return;
+  tickScheduled = true;
+  self.setTimeout(() => {
+    tickScheduled = false;
+    if (halted || !core) return;
+    if (!paused) {
+      const reason = core._emulator_run_ffi(SCHEDULER_CYCLE_BUDGET);
+      if (reason === 4) log("warn", "scheduler stopped a guest thread after a CPU fault");
+    }
+    scheduleExecutionTick();
+  }, WORKER_TICK_INTERVAL_MS);
+}
 
 async function init(memory: WebAssembly.Memory): Promise<void> {
   log("info", "cpu.worker initialising");
@@ -79,6 +98,7 @@ async function init(memory: WebAssembly.Memory): Promise<void> {
     backendVersion: backendId === 1 ? "0.1.0-dev" : "1.0.0",
   };
   self.postMessage(ready);
+  scheduleExecutionTick();
 }
 
 self.addEventListener("message", (event: MessageEvent<MainToCPUMessage>) => {
@@ -96,15 +116,26 @@ self.addEventListener("message", (event: MessageEvent<MainToCPUMessage>) => {
   }
 
   if (msg.type === "pause" || msg.type === "resume") {
-    // No scheduler yet (§7 is Phase 2); acknowledged so main.ts's
-    // visibilitychange handler has somewhere real to send these.
-    log("debug", `${msg.type} (no-op until the Phase 2 scheduler exists)`);
+    if (!core) {
+      log("warn", `${msg.type} ignored before core initialisation`);
+      return;
+    }
+    const nextPaused = msg.type === "pause";
+    if (core._emulator_set_paused_ffi(nextPaused ? 1 : 0) === 0) {
+      log("error", `scheduler ${msg.type} request failed`);
+      return;
+    }
+    paused = nextPaused;
+    log("debug", `scheduler ${paused ? "paused" : "resumed"}`);
     return;
   }
 
   if (msg.type === "halt") {
-    const halted: CPUToMainMessage = { type: "halted" };
-    self.postMessage(halted);
+    halted = true;
+    tickScheduled = false;
+    if (core) core._emulator_destroy_ffi();
+    const haltedMessage: CPUToMainMessage = { type: "halted" };
+    self.postMessage(haltedMessage);
     return;
   }
 });
