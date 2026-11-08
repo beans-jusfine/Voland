@@ -367,7 +367,8 @@ static bool execute_one(InterpreterState *s) {
 undefined:
   s->regs.pc=pc;
   if (s->undefined_handler) s->undefined_handler((CPU_State *)s,insn,s->userdata);
-  log_warn("[cpu/interpreter] unsupported instruction 0x%08x at 0x%llx",
+  log_warn("[cpu/interpreter] unsupported instruction 0x%08x at PC 0x%llx "
+           "(fault reason: CPU_EXIT_FAULT)",
            insn,(unsigned long long)pc);
   return false;
 }
