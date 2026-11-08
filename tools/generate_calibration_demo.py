@@ -66,7 +66,7 @@ for index, pixel in enumerate(pixels):
     if index % CHUNK_PIXELS == CHUNK_PIXELS - 1 and index + 1 < W * H:
         code.append(add_x_imm(1, 1, 4, shift12=True))
 # Set frame_ready only after every pixel write has completed.
-code.extend((movz_w(1), 0xb9000a80))  # STR W0, [X20, #16]
+code.extend((movz_w(1), 0xb9001280))  # STR W0, [X20, #16]
 if len(code) + 1 > INSTRUCTIONS:
     raise RuntimeError("calibration frame exceeds instruction budget")
 code.extend([0xd503201f] * (INSTRUCTIONS - len(code) - 1))
