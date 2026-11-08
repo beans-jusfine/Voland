@@ -12,7 +12,7 @@
 const sw: ServiceWorkerGlobalScope = globalThis as unknown as ServiceWorkerGlobalScope;
 
 const SHELL_CACHE = "voland-shell-v2";
-const WASM_CACHE = "voland-wasm-v2";
+const WASM_CACHE = "voland-wasm-v3";
 const BASE_URL = new URL(".", sw.registration.scope);
 const BASE_PATH = BASE_URL.pathname;
 const SHELL_URL = new URL("index.html", BASE_URL).href;
