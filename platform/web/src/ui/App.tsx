@@ -10,6 +10,7 @@ interface AppProps {
   readonly cpuBackend: string;
   readonly guestRamMiB: number;
   readonly onLoadNro: (file: File) => void;
+  readonly onStopEmulator: () => void;
 }
 
 type Page = "home" | "library" | "emulator" | "settings";
@@ -29,6 +30,7 @@ function App(props: AppProps) {
   const [showFps, setShowFps] = createSignal(false);
   const [fps, setFps] = createSignal(getFps());
   const [launching, setLaunching] = createSignal("");
+  const [emulatorStopped, setEmulatorStopped] = createSignal(false);
 
   onMount(() => {
     const offLogs = subscribeLogs((entry) => {
@@ -51,7 +53,7 @@ function App(props: AppProps) {
   });
 
   async function launchDemo(file: string): Promise<void> {
-    if (launching()) return;
+    if (launching() || emulatorStopped()) return;
     setLaunching(file);
     try {
       const url = new URL(`${import.meta.env.BASE_URL}homebrew/${file}`, location.origin);
@@ -69,6 +71,7 @@ function App(props: AppProps) {
   }
 
   function loadSelected(): void {
+    if (emulatorStopped()) return;
     const file = selectedNro();
     if (file) {
       props.onLoadNro(file);
@@ -123,8 +126,8 @@ function App(props: AppProps) {
       {page() === "emulator" && (
         <main class="voland-emulator-page">
           <section class="voland-display-column">
-            <div class="voland-section-heading"><div><p class="voland-eyebrow">LIVE OUTPUT</p><h1>Emulator</h1><p>Guest framebuffer output appears here.</p></div><div class="voland-display-controls"><button class={`voland-fps-toggle${showFps() ? " is-active" : ""}`} type="button" aria-pressed={showFps()} onClick={() => setShowFps((value) => !value)}>FPS {showFps() ? "ON" : "OFF"}</button><span class="voland-display-state">GPU</span></div></div>
-            <div class="voland-display-frame"><div class="voland-screen"><div class="voland-screen-placeholder">Waiting for display output</div>{showFps() && <div class="voland-fps-counter">FPS <strong>{fps()}</strong></div>}</div></div>
+            <div class="voland-section-heading"><div><p class="voland-eyebrow">LIVE OUTPUT</p><h1>Emulator</h1><p>Guest framebuffer output appears here.</p></div><div class="voland-display-controls"><button class={`voland-fps-toggle${showFps() ? " is-active" : ""}`} type="button" aria-pressed={showFps()} onClick={() => setShowFps((value) => !value)}>FPS {showFps() ? "ON" : "OFF"}</button><button class="voland-stop-button" type="button" disabled={emulatorStopped()} onClick={() => { props.onStopEmulator(); setEmulatorStopped(true); }}>■ STOP EMULATOR</button><span class="voland-display-state">{emulatorStopped() ? "STOPPED" : "GPU"}</span></div></div>
+            <div class="voland-display-frame"><div class="voland-screen"><div class="voland-screen-placeholder">{emulatorStopped() ? "Emulator stopped · refresh to restart" : "Waiting for display output"}</div>{showFps() && <div class="voland-fps-counter">FPS <strong>{fps()}</strong></div>}</div></div>
             <div class="voland-display-caption"><span>DISPLAY</span><span>1280 × 720</span></div>
             <div class="voland-facts"><div><dt>CPU backend</dt><dd>{props.cpuBackend}</dd></div><div><dt>GPU adapter</dt><dd>{props.adapterLabel}</dd></div><div><dt>Guest RAM</dt><dd>{props.guestRamMiB} MiB</dd></div></div>
           </section>

@@ -12,13 +12,14 @@ export interface MountOptions {
   readonly cpuBackend:   string;
   readonly guestRamMiB:  number;
   readonly onLoadNro: (file: File) => void;
+  readonly onStopEmulator: () => void;
 }
 
 export function mountShell(options: MountOptions): void {
   const root = document.getElementById("app-root");
   if (!root) throw new Error("mountShell: #app-root missing from index.html");
 
-  render(() => <App adapterLabel={options.adapterLabel} cpuBackend={options.cpuBackend} guestRamMiB={options.guestRamMiB} onLoadNro={options.onLoadNro} />, root);
+  render(() => <App adapterLabel={options.adapterLabel} cpuBackend={options.cpuBackend} guestRamMiB={options.guestRamMiB} onLoadNro={options.onLoadNro} onStopEmulator={options.onStopEmulator} />, root);
 
   const boot = document.getElementById("boot");
   if (boot) {

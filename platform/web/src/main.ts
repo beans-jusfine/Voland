@@ -135,6 +135,7 @@ interface BootResult {
   readonly cpuBackend:   string;
   readonly guestRamMiB:  number;
   readonly onLoadNro: (file: File) => void;
+  readonly onStopEmulator: () => void;
 }
 
 async function boot(): Promise<BootResult | null> {
@@ -281,6 +282,28 @@ async function boot(): Promise<BootResult | null> {
     adapterLabel: adapterLabel ?? "unavailable",
     cpuBackend:   cpuBackend   ?? "unavailable",
     guestRamMiB: finalLayout ? finalLayout.guestRamSize / (1024 * 1024) : 0,
+    onStopEmulator: () => {
+      appendLogLine("info", "emulator: stop requested");
+      setStatus("stopping");
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        window.clearTimeout(stopTimeout);
+        cpuWorker.removeEventListener("message", onHalted);
+        cpuWorker.terminate();
+        gpuWorker.terminate();
+        setStatus("stopped");
+        setFps(0);
+        appendLogLine("info", "emulator stopped; refresh the page to restart");
+      };
+      const onHalted = (event: MessageEvent<CPUToMainMessage>) => {
+        if (event.data.type === "halted") finish();
+      };
+      cpuWorker.addEventListener("message", onHalted);
+      const stopTimeout = window.setTimeout(finish, 1500);
+      cpuWorker.postMessage({ type: "halt" } satisfies MainToCPUMessage);
+    },
     onLoadNro: (file: File) => {
       if (!file.name.toLowerCase().endsWith(".nro")) { appendLogLine("error", "please choose a .nro homebrew file"); return; }
       if (file.size === 0 || file.size > 512 * 1024 * 1024) { appendLogLine("error", "NRO must be between 1 byte and 512 MiB"); return; }
