@@ -4,6 +4,11 @@
 #include <stdint.h>
 #include <string.h>
 
+#if defined(__EMSCRIPTEN__)
+_Static_assert(sizeof(void*) == 4 && sizeof(uintptr_t) == 4,
+               "the browser core must use wasm32 pointers, not memory64 pointers");
+#endif
+
 #include "common/vmm.h"
 
 #include <stdint.h>
