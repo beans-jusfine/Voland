@@ -32,7 +32,8 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
     return vec4f(0.0, 0.0, 0.0, 1.0);
   }
   let uv = (position.xy - origin) / fittedSize;
-  return textureSample(frameTexture, frameSampler, uv);
+  // Explicit LOD keeps sampling valid after the fragment-dependent letterbox test.
+  return textureSampleLevel(frameTexture, frameSampler, uv, 0.0);
 }`;
 async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout: MemoryLayout): Promise<void> {
   if (!("gpu" in navigator)) throw new Error("WebGPU unavailable inside worker");
