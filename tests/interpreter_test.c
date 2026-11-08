@@ -197,8 +197,8 @@ int main(void) {
   backend->set_pc(state, CODE_GVA + 0x130);
   CHECK(backend->step(state) == CPU_EXIT_CYCLES_ELAPSED);
   CHECK(backend->get_reg(state, 0) == 0);
-  backend->set_reg(state, 2, UINT64_C(0x8000000000000000));
-  backend->set_reg(state, 1, UINT64_MAX);
+  backend->set_reg(state, 2, UINT64_MAX);
+  backend->set_reg(state, 1, UINT64_C(0x8000000000000000));
   backend->set_pc(state, CODE_GVA + 0x134);
   CHECK(backend->step(state) == CPU_EXIT_CYCLES_ELAPSED);
   CHECK(backend->get_reg(state, 1) == UINT64_C(0x8000000000000000));
