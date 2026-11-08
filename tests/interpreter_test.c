@@ -36,7 +36,7 @@ int main(void) {
 
   VMM_Context *vmm = vmm_create();
   CHECK(vmm != NULL);
-  CHECK_OK(vmm_map(vmm, CODE_GVA, 0, VMM_PAGE_SIZE, VMM_PERM_RWX));
+  CHECK_OK(vmm_map(vmm, CODE_GVA, 0, VMM_PAGE_SIZE, VMM_PERM_ALL));
 
   /* MOVZ X0,#42; ADD X1,X0,#8; STR X1,[X2,#8]; LDR X3,[X2,#8];
    * SVC #0x1234; B . */
