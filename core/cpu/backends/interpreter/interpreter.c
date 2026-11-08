@@ -197,6 +197,30 @@ static bool execute_one(InterpreterState *s) {
     return true;
   }
 
+  /* SBFM / UBFM: rotate then extract a contiguous bitfield. */
+  if ((insn & 0x1f800000u)==0x13000000u) {
+    const bool is64=(insn>>31)!=0;
+    const unsigned opc=(insn>>29)&3u;
+    const unsigned n=(insn>>22)&1u;
+    const unsigned width=is64?64u:32u;
+    const unsigned immr=(insn>>16)&63u, imms=(insn>>10)&63u;
+    const unsigned rn=(insn>>5)&31u, rd=insn&31u;
+    if (opc==1u || opc==3u || n!=(unsigned)is64 ||
+        immr>=width || imms>=width) goto undefined;
+    const unsigned r=immr&(width-1u), sbit=imms&(width-1u);
+    const unsigned field_width=((sbit-r)&(width-1u))+1u;
+    const uint64_t value=read_reg(s,rn,is64,false);
+    const uint64_t rotated=r==0u?value:
+        ((value>>r)|(value<<(width-r)));
+    const uint64_t mask=field_width==width?
+        (is64?UINT64_MAX:UINT32_MAX):
+        ((UINT64_C(1)<<field_width)-1u);
+    uint64_t result=rotated&mask;
+    if (opc==0u) result=sign_extend(result,field_width);
+    write_reg(s,rd,result,is64,false);
+    return true;
+  }
+
   /* ADD / SUB (immediate), including flag-setting CMP alias. */
   if ((insn & 0x1f000000u)==0x11000000u) {
     const bool is64=(insn>>31)!=0, sub=((insn>>30)&1u)!=0, set=((insn>>29)&1u)!=0;
