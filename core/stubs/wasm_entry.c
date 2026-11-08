@@ -33,6 +33,7 @@ EXPORT void emulator_destroy_ffi(void);
 EXPORT int emulator_run_ffi(uint64_t cycle_budget);
 EXPORT int emulator_step_ffi(void);
 EXPORT int emulator_set_paused_ffi(int paused);
+EXPORT int emulator_load_nro_ffi(uintptr_t data_ptr, uint32_t size);
 EXPORT uint64_t cpu_get_reg_ffi(uint32_t index);
 EXPORT void cpu_set_reg_ffi(uint32_t index, uint64_t value);
 EXPORT uint64_t cpu_get_pc_ffi(void);
@@ -82,6 +83,18 @@ EXPORT int emulator_set_paused_ffi(int paused)
     return 0;
   }
   return 1;
+}
+
+EXPORT int emulator_load_nro_ffi(uintptr_t data_ptr, uint32_t size)
+{
+  if (!g_initialised || data_ptr == 0 || size == 0) return RESULT_INVALID_ARGUMENT;
+  const Byte_Source source = byte_source_from_memory((const void *)data_ptr, size);
+  const Error err = emulator_load_nro(&g_emulator, &source, 0);
+  if (err.code != RESULT_OK) {
+    log_error("[wasm_entry] NRO load failed (%d): %s", (int)err.code, err.message);
+    return (int)err.code;
+  }
+  return RESULT_OK;
 }
 
 EXPORT int emulator_step_ffi(void)

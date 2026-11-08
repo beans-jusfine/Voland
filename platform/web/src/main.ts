@@ -134,6 +134,7 @@ interface BootResult {
   readonly adapterLabel: string;
   readonly cpuBackend:   string;
   readonly guestRamMiB:  number;
+  readonly onLoadNro: (file: File) => void;
 }
 
 async function boot(): Promise<BootResult | null> {
@@ -277,7 +278,15 @@ async function boot(): Promise<BootResult | null> {
   return {
     adapterLabel: adapterLabel ?? "unavailable",
     cpuBackend:   cpuBackend   ?? "unavailable",
-    guestRamMiB:  finalLayout ? finalLayout.guestRamSize / (1024 * 1024) : 0,
+    guestRamMiB: finalLayout ? finalLayout.guestRamSize / (1024 * 1024) : 0,
+    onLoadNro: (file: File) => {
+      if (!file.name.toLowerCase().endsWith(".nro")) { appendLogLine("error", "please choose a .nro homebrew file"); return; }
+      if (file.size === 0 || file.size > 512 * 1024 * 1024) { appendLogLine("error", "NRO must be between 1 byte and 512 MiB"); return; }
+      file.arrayBuffer().then(buffer => {
+        cpuWorker.postMessage({ type: "load-nro", name: file.name, buffer } satisfies MainToCPUMessage, [buffer]);
+        appendLogLine("info", `sent ${file.name} to the CPU loader (${file.size.toLocaleString()} bytes)`);
+      }).catch(error => appendLogLine("error", `could not read ${file.name}: ${(error as Error).message}`));
+    },
   };
 }
 

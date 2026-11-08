@@ -130,6 +130,21 @@ self.addEventListener("message", (event: MessageEvent<MainToCPUMessage>) => {
     return;
   }
 
+  if (msg.type === "load-nro") {
+    if (!core) { log("error", "cannot load NRO before the core is ready"); return; }
+    if (msg.buffer.byteLength === 0 || msg.buffer.byteLength > 512 * 1024 * 1024) {
+      log("error", `rejected ${msg.name}: file is empty or larger than 512 MiB`); return;
+    }
+    const ptr = core._malloc(msg.buffer.byteLength);
+    if (!ptr) { log("error", `not enough WASM memory to stage ${msg.name}`); return; }
+    try {
+      core.HEAPU8.set(new Uint8Array(msg.buffer), ptr >>> 0);
+      const result = core._emulator_load_nro_ffi(ptr, msg.buffer.byteLength);
+      if (result === 0) log("info", `loaded ${msg.name}; main homebrew thread is running`);
+      else log("error", `could not load ${msg.name} (loader result ${result}); see core diagnostics above`);
+    } finally { core._free(ptr); }
+    return;
+  }
   if (msg.type === "halt") {
     halted = true;
     tickScheduled = false;

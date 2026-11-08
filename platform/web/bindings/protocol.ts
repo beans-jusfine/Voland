@@ -15,7 +15,8 @@ export type MainToCPUMessage =
   | { readonly type: "init"; readonly memory: WebAssembly.Memory }
   | { readonly type: "pause" }
   | { readonly type: "resume" }
-  | { readonly type: "halt" };
+  | { readonly type: "halt" }
+  | { readonly type: "load-nro"; readonly name: string; readonly buffer: ArrayBuffer };
 
 export type CPUToMainMessage =
   | { readonly type: "layout"; readonly layout: MemoryLayout }
