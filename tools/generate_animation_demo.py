@@ -6,7 +6,8 @@ from pathlib import Path
 W = H = 32
 TEXT_OFF = 0x1000
 FRAME_INSTRUCTIONS = 10_000
-DATA_SIZE = W * H * 4
+FB_HEADER_SIZE = 16
+DATA_SIZE = FB_HEADER_SIZE + W * H * 4
 SQUARE = 5
 # Move right, then left again. One complete frame is one 10,000-cycle
 # scheduler slice (about 16 ms at Voland's current web tick interval).
@@ -44,7 +45,7 @@ for frame_index, square_x in enumerate(POSITIONS):
     instructions = []
     if frame_index == 0:
         data_page_delta = (0)  # filled after DATA_OFF is known below
-        instructions.extend((0, 0))  # ADRP X1; ADD X1, X1, #0
+        instructions.extend((0, 0))  # ADRP X1; ADD X1, X1, #FB_HEADER_SIZE
 
     for y in range(H):
         for x in range(W):
@@ -57,7 +58,7 @@ for frame_index, square_x in enumerate(POSITIONS):
                     red, green, blue = (180, 245, 255)
             pixel = rgba(red, green, blue)
             instructions.extend((movz_w(pixel), movk_w16(pixel >> 16),
-                                 str_w((y * W + x) * 4)))
+                                 str_w(FB_HEADER_SIZE + (y * W + x) * 4)))
 
     # Every frame block is exactly one scheduler slice long. This makes
     # each published image a complete frame rather than a partially drawn one.
@@ -71,7 +72,7 @@ TEXT_SIZE = FRAME_COUNT * FRAME_INSTRUCTIONS * 4
 DATA_OFF = align(TEXT_OFF + TEXT_SIZE, 0x1000)
 page_delta = (DATA_OFF - TEXT_OFF) // 0x1000
 frame_blocks[0][0] = adrp_x1(page_delta)
-frame_blocks[0][1] = 0x91000021  # ADD X1, X1, #0
+frame_blocks[0][1] = 0x91004021  # ADD X1, X1, #16
 
 # The last instruction in each block branches to the next block; the final
 # block loops to the first. Branch offsets are relative to the branch PC.
@@ -96,7 +97,7 @@ put32(0x24, TEXT_SIZE)
 put32(0x30, DATA_OFF)
 put32(0x34, DATA_SIZE)
 
-cursor = TEXT_OFF
+put32(DATA_OFF, 0x31424656)  # VFB1 descriptor\nput32(DATA_OFF + 4, W)\nput32(DATA_OFF + 8, H)\nput32(DATA_OFF + 12, 1)  # RGBA8\n\ncursor = TEXT_OFF
 for block in frame_blocks:
     for instruction in block:
         put32(cursor, instruction)

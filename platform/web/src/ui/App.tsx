@@ -83,7 +83,7 @@ function App(props: AppProps) {
             <button class="voland-load-button" type="button" disabled={!selectedNro()}
               onClick={() => { const file = selectedNro(); if (file) props.onLoadNro(file); }}>Load NRO</button>
             <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-animation-demo.nro`} download="voland-animation-demo.nro">Download Voland animation demo NRO</a>
-            <p class="voland-loader-note">This demo animates a 5×5 square across a 32×32 RGBA8 framebuffer using guest ARM64 instructions. The CPU worker copies guest-owned pixels after each execution slice for WebGPU presentation.</p>
+            <p class="voland-loader-note">Guest homebrew can publish a VFB1 descriptor (width, height, RGBA8 format) followed by its pixels in .data. Voland validates and copies each guest frame into shared memory for WebGPU presentation. Legacy 32×32 demos remain supported.</p>
           </section>
 
           <section class="voland-panel voland-log">

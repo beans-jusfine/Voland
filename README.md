@@ -54,7 +54,7 @@ platform/
 recompiler/     ← Ballistic (git submodule, optional desktop backend)
 ```
 
-Full architecture documentation: [DESIGN.md](docs/DESIGN.md)
+Full architecture documentation: [DESIGN.md](docs/DESIGN.md). The current guest-to-display framebuffer contract is documented in [GUEST_FRAMEBUFFER.md](docs/GUEST_FRAMEBUFFER.md).
 
 ---
 

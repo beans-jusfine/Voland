@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdatomic.h>
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -11,6 +12,8 @@
 #else
 #define EXPORT
 #endif
+#define VOLAND_FB_MAGIC 0x31424656u /* 'VFB1' */
+#define VOLAND_FB_HEADER_BYTES 16u
 #define DEMO_FRAME_WIDTH 32u
 #define DEMO_FRAME_HEIGHT 32u
 #define DEMO_FRAME_BYTES (DEMO_FRAME_WIDTH * DEMO_FRAME_HEIGHT * 4u)
@@ -42,21 +45,36 @@ EXPORT void emulator_destroy_ffi(void) {
   if (!g_initialised) return;
   emulator_destroy(&g_emulator); g_initialised = 0;
 }
-/* Copy the guest-owned 32x32 RGBA8 framebuffer into the shared presentation
- * slot after each guest execution slice. Demo NROs keep the pixels in their
- * .data segment; this function transports them but never synthesizes them. */
+/* Guest framebuffer ABI: a 16-byte VFB1 descriptor at the start of the
+ * first module's .data segment: magic, width, height, format (1 = RGBA8).
+ * Pixels immediately follow the descriptor. Legacy 32x32 pixel demos remain
+ * readable while homebrew migrates to the descriptor. */
 static void publish_guest_frame_if_ready(void) {
   if (!g_initialised || !g_emulator.program_loaded ||
       g_emulator.process.module_count == 0) return;
   const Process_Module *module = &g_emulator.process.modules[0];
-  if (module->data.size < DEMO_FRAME_BYTES) return;
-  uint8_t guest_pixels[DEMO_FRAME_BYTES];
-  const Error read = vmm_read_block(g_emulator.vmm, module->data.base,
-                                    guest_pixels, sizeof(guest_pixels));
-  if (read.code != RESULT_OK) {
-    log_error("[wasm_entry] could not read guest framebuffer: %s", read.message);
-    return;
+  uint32_t width = DEMO_FRAME_WIDTH;
+  uint32_t height = DEMO_FRAME_HEIGHT;
+  uint32_t format = 1u;
+  uint64_t pixel_offset = 0;
+  if (module->data.size >= VOLAND_FB_HEADER_BYTES) {
+    uint32_t descriptor[4];
+    const Error header_read = vmm_read_block(g_emulator.vmm, module->data.base,
+                                             descriptor, sizeof(descriptor));
+    if (header_read.code != RESULT_OK) return;
+    if (descriptor[0] == VOLAND_FB_MAGIC) {
+      width = descriptor[1];
+      height = descriptor[2];
+      format = descriptor[3];
+      pixel_offset = VOLAND_FB_HEADER_BYTES;
+    }
   }
+  if (width == 0 || width > FRAMEBUFFER_MAX_WIDTH ||
+      height == 0 || height > FRAMEBUFFER_MAX_HEIGHT || format != 1u) return;
+  const uint64_t byte_length = (uint64_t)width * height * 4u;
+  if (byte_length > FRAMEBUFFER_SLOT_BYTES ||
+      pixel_offset > module->data.size ||
+      byte_length > module->data.size - pixel_offset) return;
 
   const Memory_Layout *layout = layout_get();
   if (!layout) return;
@@ -66,11 +84,16 @@ static void publish_guest_frame_if_ready(void) {
   const uint32_t slot = (next - 1u) & 1u;
   uint32_t *metadata = (uint32_t *)(void *)(region + 8u + slot * 16u);
   uint8_t *pixels = region + FRAMEBUFFER_HEADER_BYTES + (uint64_t)slot * FRAMEBUFFER_SLOT_BYTES;
-  memcpy(pixels, guest_pixels, sizeof(guest_pixels));
-  metadata[0] = DEMO_FRAME_WIDTH;
-  metadata[1] = DEMO_FRAME_HEIGHT;
-  metadata[2] = 1u; /* RGBA8 */
-  metadata[3] = DEMO_FRAME_BYTES;
+  const Error read = vmm_read_block(g_emulator.vmm, module->data.base + pixel_offset,
+                                    pixels, byte_length);
+  if (read.code != RESULT_OK) {
+    log_error("[wasm_entry] could not read guest framebuffer: %s", read.message);
+    return;
+  }
+  metadata[0] = width;
+  metadata[1] = height;
+  metadata[2] = format;
+  metadata[3] = (uint32_t)byte_length;
   atomic_store_explicit(publish, next, memory_order_release);
 }
 
