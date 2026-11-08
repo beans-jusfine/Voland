@@ -64,6 +64,14 @@ jobs:
         run: cmake --preset web
       - name: Build
         run: cmake --build --preset web
+      - name: Validate 1 GiB Chromebook memory profile
+        run: |
+          emcmake cmake -S . -B build/web-chromebook -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCPU_BACKEND=interpreter \
+            -DVOLAND_WEB_MEMORY_PAGES=32768 \
+            -DVOLAND_WEB_GUEST_RAM_MIB=1024
+          cmake --build build/web-chromebook --parallel
       - uses: actions/upload-artifact@v4
         with:
           name: switch-core-wasm
