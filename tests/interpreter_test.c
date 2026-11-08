@@ -148,6 +148,38 @@ int main(void) {
   CHECK(backend->get_reg(state, 2) == UINT64_C(0xfffffffffffffff0));
   CHECK(backend->get_reg(state, 4) == UINT64_C(0x34));
 
+  /* Conditional select family: CSEL, CSINC, CSINV, and CSNEG.
+   * With Z set, EQ selects Rn; with Z clear, the fallback transforms Rm. */
+  const uint32_t select_program[] = {
+    UINT32_C(0x9a820020), /* CSEL X0, X1, X2, EQ */
+    UINT32_C(0x1a820420), /* CSINC W0, W1, W2, EQ */
+    UINT32_C(0x5a820020), /* CSINV W0, W1, W2, EQ */
+    UINT32_C(0x5a820420), /* CSNEG W0, W1, W2, EQ */
+    UINT32_C(0x9a8f0023), /* CSEL X3, X1, X15, EQ */
+  };
+  CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0xd0, select_program, sizeof(select_program)));
+  backend->set_reg(state, 1, UINT64_C(0x123456789abcdef0));
+  backend->set_reg(state, 2, UINT64_C(0x0000000000000005));
+  backend->set_reg(state, 15, UINT64_C(0xfeedface));
+  backend->set_pstate(state, UINT32_C(0x40000000)); /* Z=1: EQ true */
+  backend->set_pc(state, CODE_GVA + 0xd0);
+  CHECK(backend->run(state, 1) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(backend->get_reg(state, 0) == UINT64_C(0x123456789abcdef0));
+  backend->set_pc(state, CODE_GVA + 0xd4);
+  backend->set_pstate(state, 0); /* Z=0: EQ false */
+  CHECK(backend->run(state, 1) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(backend->get_reg(state, 0) == 6);
+  backend->set_pc(state, CODE_GVA + 0xd8);
+  CHECK(backend->run(state, 1) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(backend->get_reg(state, 0) == UINT32_C(0xfffffffa));
+  backend->set_pc(state, CODE_GVA + 0xdc);
+  CHECK(backend->run(state, 1) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(backend->get_reg(state, 0) == UINT32_C(0xfffffffb));
+  backend->set_pc(state, CODE_GVA + 0xe0);
+  backend->set_pstate(state, UINT32_C(0x40000000));
+  CHECK(backend->run(state, 1) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(backend->get_reg(state, 3) == UINT64_C(0x123456789abcdef0));
+
   /* A subtraction underflow sets N and clears C. */
   const uint32_t underflow_program[] = { UINT32_C(0xeb02002b) };
   CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0xc0, underflow_program, sizeof(underflow_program)));

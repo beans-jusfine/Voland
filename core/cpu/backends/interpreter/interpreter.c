@@ -76,7 +76,7 @@ static bool condition_passed(uint32_t flags, unsigned cond) {
     case 6: return v; case 7: return !v; case 8: return c && !z;
     case 9: return !c || z; case 10: return n == v;
     case 11: return n != v; case 12: return !z && n == v;
-    case 13: return z || n != v; case 14: return true;
+    case 13: return z || n != v; case 14: case 15: return true;
     default: return false;
   }
 }
@@ -193,6 +193,27 @@ static bool execute_one(InterpreterState *s) {
     const uint64_t accumulator=read_reg(s,ra,is64,false);
     const uint64_t product=left*right;
     const uint64_t result=subtract?accumulator-product:accumulator+product;
+    write_reg(s,rd,result,is64,false);
+    return true;
+  }
+
+  /* CSEL / CSINC / CSINV / CSNEG: select Rn when the condition
+   * holds; otherwise select Rm, optionally incremented, inverted, or negated. */
+  if ((insn & 0x3fe00800u)==0x1a800000u) {
+    const bool is64=(insn>>31)!=0;
+    const bool invert=((insn>>30)&1u)!=0;
+    const bool transform=((insn>>10)&1u)!=0;
+    const unsigned cond=(insn>>12)&15u;
+    const unsigned rm=(insn>>16)&31u, rn=(insn>>5)&31u, rd=insn&31u;
+    uint64_t result;
+    if (condition_passed(s->regs.pstate,cond)) {
+      result=read_reg(s,rn,is64,false);
+    } else {
+      result=read_reg(s,rm,is64,false);
+      if (invert && transform) result=UINT64_C(0)-result; /* CSNEG */
+      else if (invert) result=~result;                       /* CSINV */
+      else if (transform) result+=1u;                        /* CSINC */
+    }
     write_reg(s,rd,result,is64,false);
     return true;
   }
