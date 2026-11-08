@@ -18,6 +18,7 @@
 #include "hle/kernel/process.h"
 #include "hle/kernel/scheduler.h"
 #include "hle/loader/byte_source.h"
+#include "hle/loader/nro.h"
 #include "hle/services/sm/sm.h"
 
 /* Scratch for one bootstrap: the ExeFS directory plus the largest
@@ -72,6 +73,10 @@ void emulator_destroy(Emulator *emulator);
  * Emulator: a second call fails with RESULT_INVALID_ARGUMENT until
  * emulator_unload_program(). */
 Error emulator_load_program(Emulator *emulator, const Byte_Source *nca, uint64_t aslr_seed);
+
+/* Loads a standalone NRO homebrew image (no NCA/NPDM required). The
+ * source only needs to remain valid for the duration of this call. */
+Error emulator_load_nro(Emulator *emulator, const Byte_Source *nro, uint64_t aslr_seed);
 
 /* Unmaps the process and resets the page allocator. No-op if nothing is
  * loaded. */

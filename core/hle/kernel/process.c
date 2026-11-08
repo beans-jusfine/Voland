@@ -266,6 +266,124 @@ fail:
   return err;
 }
 
+
+/* Bootstrap a standalone homebrew NRO. NROs have no NPDM, so this path
+ * supplies a deliberately minimal 64-bit application profile. */
+Error process_bootstrap_nro(const NRO *nro, VMM_Context *vmm, Page_Allocator *pages,
+                            uint64_t aslr_seed, Process *out) {
+  if (!nro || !nro->source || !vmm || !pages || !out) {
+    return ERR(RESULT_INVALID_ARGUMENT, "process_bootstrap_nro: NULL argument");
+  }
+  const NRO_Segment *text = &nro->segments[NRO_SEGMENT_TEXT];
+  const NRO_Segment *rodata = &nro->segments[NRO_SEGMENT_RODATA];
+  const NRO_Segment *data = &nro->segments[NRO_SEGMENT_DATA];
+  if (text->size == 0 || (text->memory_offset & VMM_PAGE_OFFSET_MASK) != 0 ||
+      (rodata->size && (rodata->memory_offset & VMM_PAGE_OFFSET_MASK) != 0) ||
+      (data->size && (data->memory_offset & VMM_PAGE_OFFSET_MASK) != 0) ||
+      nro->image_size == 0 || (nro->image_size & VMM_PAGE_OFFSET_MASK) != 0 ||
+      text->memory_offset > nro->image_size ||
+      text->size > nro->image_size - text->memory_offset ||
+      (rodata->size && (rodata->memory_offset > nro->image_size ||
+       rodata->size > nro->image_size - rodata->memory_offset)) ||
+      (data->size && (data->memory_offset > nro->image_size ||
+       data->size > nro->image_size - data->memory_offset))) {
+    return ERR(RESULT_INVALID_ARGUMENT,
+               "process_bootstrap_nro: invalid or non-page-aligned NRO image layout");
+  }
+
+  memset(out, 0, sizeof(*out));
+  NPDM profile;
+  memset(&profile, 0, sizeof(profile));
+  profile.is_64bit_instruction = true;
+  profile.address_space = NPDM_ADDRESS_SPACE_64_BIT_39;
+  profile.main_thread_priority = 30;
+  profile.main_thread_core_number = 0;
+  profile.main_thread_stack_size = 0x40000;
+  memcpy(profile.name, "homebrew", sizeof("homebrew"));
+
+  Error err = address_space_init(profile.address_space, nro->image_size, aslr_seed,
+                                 &out->address_space);
+  if (!error_is_ok(err)) return err;
+
+  Mapping_List mapped;
+  mapped.count = 0;
+  Process_Module *module = &out->modules[0];
+  memset(module, 0, sizeof(*module));
+  copy_name(module->name, "main");
+  module->base_gva = out->address_space.code.base;
+  module->image_size = nro->image_size;
+  memcpy(module->module_id, nro->module_id, NRO_MODULE_ID_SIZE);
+  module->text.base = module->base_gva + text->memory_offset;
+  module->text.size = align_up_page(text->size);
+  module->rodata.base = module->base_gva + rodata->memory_offset;
+  module->rodata.size = align_up_page(rodata->size);
+  module->data.base = module->base_gva + data->memory_offset;
+  module->data.size = nro->image_size - data->memory_offset;
+
+  err = map_fresh_rw(vmm, pages, &mapped, module->base_gva, module->image_size);
+  if (!error_is_ok(err)) goto nro_fail;
+
+  void *host = NULL;
+  vmm_borrow_scope_begin(vmm);
+  err = vmm_guest_to_host(vmm, module->base_gva, module->image_size, VMM_PERM_RW, &host);
+  if (error_is_ok(err)) {
+    memset(host, 0, (size_t)module->image_size);
+    for (uint32_t i = 0; i < 3 && error_is_ok(err); i++) {
+      const NRO_Segment *segment = &nro->segments[i];
+      if (segment->size) {
+        err = nro_read_segment(nro, (NRO_Segment_Kind)i,
+                               (uint8_t *)host + segment->memory_offset,
+                               segment->size);
+      }
+    }
+  }
+  vmm_borrow_scope_end(vmm);
+  if (!error_is_ok(err)) goto nro_fail;
+
+  err = vmm_reprotect(vmm, module->text.base, module->text.size, VMM_PERM_RX);
+  if (!error_is_ok(err)) goto nro_fail;
+  if (module->rodata.size) {
+    err = vmm_reprotect(vmm, module->rodata.base, module->rodata.size, VMM_PERM_R);
+    if (!error_is_ok(err)) goto nro_fail;
+  }
+
+  out->module_count = 1;
+  out->code_bytes_mapped = nro->image_size;
+  out->entry_point = module->text.base;
+
+  out->main_thread_stack.base =
+      out->address_space.stack.base + PROCESS_STACK_GUARD_PAGES * VMM_PAGE_SIZE;
+  out->main_thread_stack.size = profile.main_thread_stack_size;
+  if (!address_region_contains(&out->address_space.stack, out->main_thread_stack.base,
+                               out->main_thread_stack.size)) {
+    err = ERR(RESULT_INVALID_ARGUMENT, "process_bootstrap_nro: main stack does not fit");
+    goto nro_fail;
+  }
+  err = map_fresh_rw(vmm, pages, &mapped, out->main_thread_stack.base,
+                     out->main_thread_stack.size);
+  if (!error_is_ok(err)) goto nro_fail;
+  err = zero_range(vmm, out->main_thread_stack.base, out->main_thread_stack.size);
+  if (!error_is_ok(err)) goto nro_fail;
+
+  err = tls_allocator_init(&out->tls, vmm, pages, out->address_space.tls_io);
+  if (!error_is_ok(err)) goto nro_fail;
+  err = tls_allocate(&out->tls, &out->main_thread_tls_gva);
+  if (!error_is_ok(err)) goto nro_fail;
+
+  out->main_thread_handle = PROCESS_MAIN_THREAD_HANDLE;
+  out->npdm = profile;
+  log_info("process: NRO homebrew bootstrapped at 0x%010llx (%llu KB)",
+           (unsigned long long)out->entry_point,
+           (unsigned long long)(nro->image_size / 1024));
+  return OK;
+
+nro_fail:
+  tls_allocator_teardown(&out->tls);
+  unmap_all(vmm, &mapped);
+  memset(out, 0, sizeof(*out));
+  return err;
+}
+
 Error process_enter_main_thread(const Process *process, const CPU_Backend *backend,
                                 CPU_State *state) {
   if (!process || !backend || !state) {

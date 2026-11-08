@@ -6,6 +6,7 @@
 #include "hle/loader/exefs.h"
 #include "hle/loader/nca_parse.h"
 #include "hle/loader/npdm.h"
+#include "hle/loader/nro.h"
 
 #include <string.h>
 
@@ -181,6 +182,51 @@ Error emulator_load_program(Emulator* emulator, const Byte_Source* nca_source,
   emulator->program_loaded = true;
   log_info("[emulator] program '%s' loaded; main thread armed at pc=0x%010llx",
            emulator->process.npdm.name, (unsigned long long)emulator->process.entry_point);
+  return OK;
+}
+
+
+Error emulator_load_nro(Emulator *emulator, const Byte_Source *nro_source,
+                        uint64_t aslr_seed) {
+  if (!emulator || !nro_source) {
+    return ERR(RESULT_INVALID_ARGUMENT, "emulator_load_nro: NULL argument");
+  }
+  if (emulator->program_loaded) {
+    return ERR(RESULT_INVALID_ARGUMENT,
+               "emulator_load_nro: a program is already loaded; unload it first");
+  }
+  NRO nro;
+  Error err = nro_open(nro_source, &nro);
+  if (!error_is_ok(err)) return err;
+
+  err = process_bootstrap_nro(&nro, emulator->vmm, &emulator->pages,
+                              aslr_seed, &emulator->process);
+  if (!error_is_ok(err)) {
+    page_allocator_reset(&emulator->pages);
+    return err;
+  }
+  err = process_enter_main_thread(&emulator->process, emulator->cpu_backend,
+                                  emulator->cpu_state);
+  if (!error_is_ok(err)) {
+    process_teardown(&emulator->process, emulator->vmm, &emulator->pages);
+    page_allocator_reset(&emulator->pages);
+    return err;
+  }
+  const uint32_t core = emulator->process.npdm.main_thread_core_number <
+                                SCHEDULER_VIRTUAL_CORE_COUNT
+                            ? emulator->process.npdm.main_thread_core_number : 0u;
+  err = scheduler_add_thread(&emulator->scheduler, emulator->cpu_state,
+                             emulator->process.npdm.main_thread_priority, core,
+                             SCHEDULER_ALL_CORE_AFFINITY,
+                             &emulator->main_thread_scheduler_id);
+  if (!error_is_ok(err)) {
+    process_teardown(&emulator->process, emulator->vmm, &emulator->pages);
+    page_allocator_reset(&emulator->pages);
+    return err;
+  }
+  emulator->program_loaded = true;
+  log_info("[emulator] NRO homebrew loaded; main thread armed at pc=0x%010llx",
+           (unsigned long long)emulator->process.entry_point);
   return OK;
 }
 

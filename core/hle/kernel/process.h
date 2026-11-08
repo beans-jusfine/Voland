@@ -71,6 +71,7 @@
 #include "hle/loader/exefs.h"
 #include "hle/loader/npdm.h"
 #include "hle/loader/nso.h"
+#include "hle/loader/nro.h"
 
 /* rtld + main + subsdk0..9 + sdk. */
 #define PROCESS_MAX_MODULES 13u
@@ -160,6 +161,12 @@ typedef struct Process_Bootstrap_Params {
  *   RESULT_OUT_OF_MEMORY    physical pages, L2 tables, or scratch exhausted
  *   RESULT_IO_ERROR         propagated from the source */
 Error process_bootstrap(const Process_Bootstrap_Params *params, Process *out);
+
+/* Builds a minimal, restricted launch profile for a standalone NRO and maps
+ * its image, main stack and TLS. NRO text/rodata/data memory offsets must
+ * be page-aligned because VMM permissions are page-granular. */
+Error process_bootstrap_nro(const NRO *nro, VMM_Context *vmm, Page_Allocator *pages,
+                            uint64_t aslr_seed, Process *out);
 
 /* Writes the Horizon entry ABI into `state` through the backend: X0 = 0,
  * X1 = main thread handle, every other X register 0, SP = stack top,
