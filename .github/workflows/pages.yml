@@ -1,4 +1,4 @@
-name: Deploy Voland to GitHub Pages
+name: Deploy Voland to Netlify
 
 on:
   push:
@@ -7,11 +7,9 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: netlify-production
   cancel-in-progress: true
 
 env:
@@ -76,12 +74,16 @@ jobs:
         env:
           VOLAND_WEB_MEMORY_PAGES: 24576
         run: pnpm run build
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: platform/web/dist
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to Netlify
+        if: ${{ vars.NETLIFY_SITE_ID != '' }}
+        working-directory: .
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+        run: |
+          npx --yes netlify-cli@latest deploy \
+            --prod \
+            --dir=platform/web/dist \
+            --site="$NETLIFY_SITE_ID" \
+            --auth="$NETLIFY_AUTH_TOKEN" \
+            --message="GitHub Actions $GITHUB_SHA"

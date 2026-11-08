@@ -13,17 +13,8 @@ const alias = {
 /**
  * Cross-origin isolation is mandatory - the shared wasm32 WebAssembly.
  * Memory (§4) is gated behind COOP + COEP. See docs/DESIGN.md section 16
- * ("Required HTTP headers"). Vite's preview and dev servers both need
- * these headers or the app fails at boot with `!crossOriginIsolated`.
- *
- * COOP must be the strict `same-origin`, not `same-origin-allow-popups`:
- * verified directly against shipping Chromium that the popups variant
- * never yields `crossOriginIsolated`, no matter what COEP is set to. An
- * earlier revision used the popups variant for OAuth opener retention
- * (§15) - unnecessary, since that flow already goes through
- * BroadcastChannel rather than `window.opener` (§16). Do not swap this
- * back; `npm run e2e` asserts `crossOriginIsolated === true` specifically
- * to catch that regression.
+ * ("Required HTTP headers"). Vite's dev and preview servers also set these
+ * headers so local testing matches production hosting.
  */
 const crossOriginIsolationHeaders = {
   "Cross-Origin-Opener-Policy":   "same-origin",
@@ -32,7 +23,7 @@ const crossOriginIsolationHeaders = {
 };
 
 export default defineConfig({
-  base: "/Voland/",
+  base: process.env.VOLAND_BASE_PATH ?? "/",
   define: {
     __VOLAND_WEB_MEMORY_PAGES__: JSON.stringify(Number(process.env.VOLAND_WEB_MEMORY_PAGES ?? "65535")),
   },
