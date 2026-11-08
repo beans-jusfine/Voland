@@ -47,9 +47,6 @@ jobs:
   deploy:
     needs: build-core
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: platform/web
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -64,6 +61,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: platform/web/pnpm-lock.yaml
       - name: Install dependencies
+        working-directory: platform/web
         run: pnpm install --frozen-lockfile
       - name: Download WebAssembly core
         uses: actions/download-artifact@v4
@@ -73,6 +71,7 @@ jobs:
       - name: Build web frontend
         env:
           VOLAND_WEB_MEMORY_PAGES: 24576
+        working-directory: platform/web
         run: pnpm run build
       - name: Pull Vercel project settings
         env:
