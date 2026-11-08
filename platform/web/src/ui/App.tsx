@@ -20,12 +20,9 @@ function App(props: AppProps) {
   const [fps, setFps] = createSignal(getFps());
 
   onMount(() => {
-    // The canvas is transferred to the GPU worker during boot. Move that same
-    // canvas into the display frame after the shell mounts; do not recreate it.
     const canvas = document.getElementById("game");
     const screen = document.querySelector(".voland-screen");
     if (canvas && screen) screen.appendChild(canvas);
-
     const offLogs = subscribeLogs((entry) => {
       setLogs((prev) => {
         const next = prev.length >= 500 ? prev.slice(1) : prev.slice();
@@ -47,7 +44,6 @@ function App(props: AppProps) {
         </div>
         <div class="voland-status">{status()}</div>
       </header>
-
       <main class="voland-main">
         <section class="voland-display-column">
           <div class="voland-section-heading">
@@ -69,46 +65,32 @@ function App(props: AppProps) {
               {showFps() && <div class="voland-fps-counter">FPS <strong>{fps()}</strong></div>}
             </div>
           </div>
-          <div class="voland-display-caption">
-            <span>DISPLAY</span>
-            <span>1280 × 720</span>
-          </div>
+          <div class="voland-display-caption"><span>DISPLAY</span><span>1280 × 720</span></div>
           <div class="voland-facts">
             <div><dt>CPU backend</dt><dd>{props.cpuBackend}</dd></div>
             <div><dt>GPU adapter</dt><dd>{props.adapterLabel}</dd></div>
             <div><dt>Guest RAM</dt><dd>{props.guestRamMiB} MiB</dd></div>
           </div>
         </section>
-
         <aside class="voland-sidebar">
           <section class="voland-panel voland-loader">
-            <div class="voland-panel-heading">
-              <h2>Homebrew loader</h2>
-              <span>NRO</span>
-            </div>
+            <div class="voland-panel-heading"><h2>Homebrew loader</h2><span>NRO</span></div>
             <label class="voland-file-label" for="nro-file">Choose a homebrew file</label>
             <input id="nro-file" class="voland-file-input" type="file" accept=".nro,application/octet-stream"
               onChange={(event) => setSelectedNro(event.currentTarget.files?.[0] ?? null)} />
             <div class="voland-file-name">{selectedNro()?.name ?? "No NRO selected"}</div>
             <button class="voland-load-button" type="button" disabled={!selectedNro()}
               onClick={() => { const file = selectedNro(); if (file) props.onLoadNro(file); }}>Load NRO</button>
+            <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-visual-diagnostic.nro`} download="voland-visual-diagnostic.nro">Download moving-shapes visual diagnostic NRO</a>
             <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-particle-storm.nro`} download="voland-particle-storm.nro">Download Particle Storm stress-test NRO</a>
             <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-animation-demo.nro`} download="voland-animation-demo.nro">Download simple animation demo NRO</a>
-            <p class="voland-loader-note">Guest homebrew can publish a VFB1 descriptor (width, height, RGBA8 format) followed by its pixels in .data. Voland validates and copies each guest frame into shared memory for WebGPU presentation. Legacy 32×32 demos remain supported.</p>
+            <p class="voland-loader-note">The visual diagnostic draws large moving magenta, cyan and yellow shapes into a VFB1 RGBA8 framebuffer. Use it to distinguish guest execution and framebuffer updates from subtle demo animation.</p>
           </section>
-
           <section class="voland-panel voland-log">
-            <div class="voland-panel-heading">
-              <h2>Event log</h2>
-              <span>LIVE</span>
-            </div>
+            <div class="voland-panel-heading"><h2>Event log</h2><span>LIVE</span></div>
             <div class="voland-log-scroll">
               <For each={logs()}>
-                {(entry) => (
-                  <p class={`log-line log-${entry.level}`}>
-                    {`[${entry.level.toUpperCase().padEnd(5, " ")}] ${entry.message}`}
-                  </p>
-                )}
+                {(entry) => <p class={`log-line log-${entry.level}`}>{`[${entry.level.toUpperCase().padEnd(5, " ")}] ${entry.message}`}</p>}
               </For>
             </div>
           </section>
@@ -117,5 +99,4 @@ function App(props: AppProps) {
     </div>
   );
 }
-
 export default App;
