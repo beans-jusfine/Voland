@@ -60,7 +60,7 @@ data_size = HEADER_SIZE + W * H * 4
 text_size = INSTRUCTIONS * 4
 data_off = (TEXT_OFF + text_size + 0xfff) & ~0xfff
 page_delta = (data_off - TEXT_OFF) // 0x1000
-code = [adrp_x(20, page_delta), add_x_imm(20, 20, 0), 0xaa1403e1]
+code = [adrp_x(20, page_delta), add_x_imm(20, 20, 0), add_x_imm(1, 20, HEADER_SIZE)]
 for index, pixel in enumerate(pixels):
     code.extend((movz_w(pixel), movk_w16(pixel >> 16), str_w(index % CHUNK_PIXELS)))
     if index % CHUNK_PIXELS == CHUNK_PIXELS - 1 and index + 1 < W * H:
