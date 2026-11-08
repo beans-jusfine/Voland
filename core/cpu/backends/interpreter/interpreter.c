@@ -197,6 +197,37 @@ static bool execute_one(InterpreterState *s) {
     return true;
   }
 
+  /* UDIV / SDIV: divide Rn by Rm. A zero divisor produces zero;
+   * signed minimum divided by -1 preserves the minimum value. */
+  if ((insn & 0x7fe0fc00u)==0x1ac00800u ||
+      (insn & 0x7fe0fc00u)==0x1ac00c00u) {
+    const bool is64=(insn>>31)!=0;
+    const bool is_signed=(insn & 0x00000400u)!=0;
+    const unsigned rm=(insn>>16)&31u, rn=(insn>>5)&31u, rd=insn&31u;
+    const uint64_t numerator=read_reg(s,rn,is64,false);
+    const uint64_t denominator=read_reg(s,rm,is64,false);
+    uint64_t result=0;
+    if (denominator!=0u) {
+      if (is_signed) {
+        if (is64) {
+          const int64_t dividend=(int64_t)numerator;
+          const int64_t divisor=(int64_t)denominator;
+          result=(dividend==INT64_MIN && divisor==-1)?(uint64_t)INT64_MIN:
+              (uint64_t)(dividend/divisor);
+        } else {
+          const int32_t dividend=(int32_t)(uint32_t)numerator;
+          const int32_t divisor=(int32_t)(uint32_t)denominator;
+          result=(dividend==INT32_MIN && divisor==-1)?(uint32_t)INT32_MIN:
+              (uint32_t)(dividend/divisor);
+        }
+      } else {
+        result=numerator/denominator;
+      }
+    }
+    write_reg(s,rd,result,is64,false);
+    return true;
+  }
+
   /* CSEL / CSINC / CSINV / CSNEG: select Rn when the condition
    * holds; otherwise select Rm, optionally incremented, inverted, or negated. */
   if ((insn & 0x3fe00800u)==0x1a800000u) {
