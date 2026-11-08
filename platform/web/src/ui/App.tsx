@@ -39,15 +39,15 @@ function App(props: AppProps) {
       <header class="voland-header">
         <div class="voland-brand">
           <span class="voland-title">Voland</span>
-          <span class="voland-subtitle">Phase 0 · skeleton</span>
+          <span class="voland-subtitle">WebGPU display test</span>
         </div>
         <div class="voland-status">{status()}</div>
       </header>
 
       <section class="voland-main">
         <div class="voland-hero">
-          <h2>Runtime online.</h2>
-          <p>Both workers initialised. Choose a Switch homebrew NRO to send it to the emulator core.</p>
+          <h2>Display pipeline online.</h2>
+          <p>WebGPU is drawing a visible test pattern behind this interface. Guest NRO graphics are not connected yet; this confirms Voland can render pixels to the screen.</p>
           <div class="voland-loader">
             <label class="voland-file-label" for="nro-file">Choose homebrew (.nro)</label>
             <input id="nro-file" class="voland-file-input" type="file" accept=".nro,application/octet-stream"
