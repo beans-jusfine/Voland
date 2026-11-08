@@ -16,7 +16,7 @@ import type { MemoryLayout } from "@bindings/layout";
 import { detectCapabilities, type PlatformCapabilities } from "./capabilities";
 import { publishBootMilestone, publishLayoutMilestone } from "./e2e-hooks";
 import { appendLogLine, setStatus } from "./log";
-import { createSharedMemory, TOTAL_MEMORY_PAGES } from "./memory";
+import { createSharedMemory, TOTAL_MEMORY_BYTES, TOTAL_MEMORY_PAGES } from "./memory";
 
 const WORKER_READY_TIMEOUT_MS = 10_000;
 
@@ -109,8 +109,10 @@ function attachWorkerLogRelay<TMessage extends { type: string }>(
     readyHandler(msg);
   });
   worker.addEventListener("error", (event: ErrorEvent) => {
-    appendLogLine("error", `${workerName} uncaught: ${event.message}`);
-    failHandler(event.message || "uncaught worker error");
+    const detail = event.message || (event.error instanceof Error ? event.error.message : String(event.error ?? "unknown worker error"));
+    const location = event.filename ? ` (${event.filename}:${event.lineno}:${event.colno})` : "";
+    appendLogLine("error", `${workerName} uncaught: ${detail}${location}`);
+    failHandler(detail);
   });
 }
 
@@ -164,7 +166,7 @@ async function boot(): Promise<BootResult | null> {
           "device limits shared memory; use a native build.");
     return null;
   }
-  appendLogLine("info", `allocated shared memory: ${TOTAL_MEMORY_PAGES} pages (~4GiB)`);
+  appendLogLine("info", `allocated shared memory: ${TOTAL_MEMORY_PAGES} pages (${(TOTAL_MEMORY_BYTES / (1024 ** 3)).toFixed(2)} GiB)`);
   publishBootMilestone(memory);
 
   const canvas = document.getElementById("game") as HTMLCanvasElement | null;

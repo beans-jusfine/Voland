@@ -17,8 +17,8 @@
 
 const sw: ServiceWorkerGlobalScope = globalThis as unknown as ServiceWorkerGlobalScope;
 
-const SHELL_CACHE = "voland-shell-v1";
-const WASM_CACHE = "voland-wasm-v1";
+const SHELL_CACHE = "voland-shell-v2";
+const WASM_CACHE = "voland-wasm-v2";
 const BASE_URL = new URL(".", sw.registration.scope); 
 const BASE_PATH = BASE_URL.pathname; 
 const SHELL_URL = new URL("index.html", BASE_URL).href;
@@ -72,7 +72,17 @@ sw.addEventListener("install", () => {
 });
 
 sw.addEventListener("activate", (event: ExtendableEvent) => {
-  event.waitUntil(sw.clients.claim());
+  event.waitUntil((async () => {
+    // Remove old app-shell/WASM caches so HTML cannot point at chunks
+    // removed by a newer Pages deployment.
+    const names = await sw.caches.keys();
+    await Promise.all(names
+      .filter(name =>
+        ((name.startsWith("voland-shell-") && name !== SHELL_CACHE) ||
+         (name.startsWith("voland-wasm-") && name !== WASM_CACHE)))
+      .map(name => sw.caches.delete(name)));
+    await sw.clients.claim();
+  })());
 });
 
 /* Fallback claim request from the page if the initial activation claim
@@ -98,9 +108,10 @@ sw.addEventListener("fetch", (event: FetchEvent) => {
   }
 
   if (event.request.mode === "navigate") {
-    // Navigation API + client-side routing (§16): every navigate request
-    // resolves to the cached shell so a hard refresh at any route works.
-    event.respondWith(cacheFirst(new Request(SHELL_URL), SHELL_CACHE));
+    // Refresh the app shell on every navigation. Cache-first HTML can keep
+    // pointing at hashed JS chunks from a previous deployment after Pages
+    // has removed those chunks; network-first retains an offline fallback.
+    event.respondWith(networkFirst(new Request(SHELL_URL)));
     return;
   }
 
