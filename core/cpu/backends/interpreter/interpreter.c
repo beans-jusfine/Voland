@@ -228,6 +228,23 @@ static bool execute_one(InterpreterState *s) {
     return true;
   }
 
+  /* CCMN (register): conditionally add Rn and Rm and update NZCV;
+   * when the condition fails, load the immediate NZCV field instead. */
+  if ((insn & 0x7fe00c10u)==0x3a400800u) {
+    const bool is64=(insn>>31)!=0;
+    const unsigned cond=(insn>>12)&15u;
+    const unsigned rm=(insn>>16)&31u, rn=(insn>>5)&31u;
+    if (condition_passed(s->regs.pstate,cond)) {
+      const uint64_t left=read_reg(s,rn,is64,false);
+      const uint64_t right=read_reg(s,rm,is64,false);
+      const uint64_t result=left+right;
+      set_nzcv_addsub(s,left,right,result,is64,false);
+    } else {
+      s->regs.pstate=(s->regs.pstate&0x0fffffffu)|((insn&15u)<<28);
+    }
+    return true;
+  }
+
   /* CSEL / CSINC / CSINV / CSNEG: select Rn when the condition
    * holds; otherwise select Rm, optionally incremented, inverted, or negated. */
   if ((insn & 0x3fe00800u)==0x1a800000u) {
