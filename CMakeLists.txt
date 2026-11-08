@@ -107,6 +107,8 @@ if(EMSCRIPTEN)
     "-sEXPORTED_FUNCTIONS=['_emulator_create_ffi','_emulator_destroy_ffi',
                             '_emulator_run_ffi','_emulator_step_ffi','_emulator_set_paused_ffi','_emulator_load_nro_ffi','_emulator_get_last_nro_error_ffi','_malloc','_free',
                             '_layout_get_ffi','_cpu_backend_id_ffi',
+                            '_emulator_guest_ram_total_ffi','_emulator_guest_ram_allocated_ffi',
+                            '_emulator_guest_ram_free_ffi','_emulator_guest_ram_peak_ffi',
                             '_cpu_get_reg_ffi','_cpu_set_reg_ffi','_cpu_get_pc_ffi']"
     "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
   )

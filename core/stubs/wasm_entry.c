@@ -34,6 +34,10 @@ EXPORT void cpu_set_reg_ffi(uint32_t index, uint64_t value);
 EXPORT uint64_t cpu_get_pc_ffi(void);
 EXPORT int cpu_backend_id_ffi(void);
 EXPORT uintptr_t layout_get_ffi(void);
+EXPORT uint64_t emulator_guest_ram_total_ffi(void);
+EXPORT uint64_t emulator_guest_ram_allocated_ffi(void);
+EXPORT uint64_t emulator_guest_ram_free_ffi(void);
+EXPORT uint64_t emulator_guest_ram_peak_ffi(void);
 static Emulator g_emulator;
 static int g_initialised = 0;
 EXPORT int emulator_create_ffi(void) {
@@ -193,6 +197,19 @@ EXPORT int cpu_backend_id_ffi(void) {
 #endif
 }
 EXPORT uintptr_t layout_get_ffi(void) { return (uintptr_t)layout_get(); }
+EXPORT uint64_t emulator_guest_ram_total_ffi(void) {
+  const Memory_Layout *layout = g_initialised ? layout_get() : NULL;
+  return layout ? layout->guest_ram_size : 0;
+}
+EXPORT uint64_t emulator_guest_ram_allocated_ffi(void) {
+  return g_initialised ? g_emulator.pages.allocated_bytes : 0;
+}
+EXPORT uint64_t emulator_guest_ram_free_ffi(void) {
+  return g_initialised ? page_allocator_free_bytes(&g_emulator.pages) : 0;
+}
+EXPORT uint64_t emulator_guest_ram_peak_ffi(void) {
+  return g_initialised ? g_emulator.pages.peak_allocated_bytes : 0;
+}
 #ifndef __EMSCRIPTEN__
 int main(void) {
   log_info("[wasm_entry] native build, running smoke test");

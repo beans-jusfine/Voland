@@ -23,6 +23,32 @@ const statusSubscribers = new Set<(text: string) => void>();
 let fpsValue = 0;
 const fpsSubscribers = new Set<(value: number) => void>();
 
+export interface MemoryStats {
+  readonly totalBytes: number;
+  readonly allocatedBytes: number;
+  readonly freeBytes: number;
+  readonly peakBytes: number;
+  readonly wasmMemoryBytes: number;
+}
+
+let memoryStats: MemoryStats | null = null;
+const memorySubscribers = new Set<(stats: MemoryStats) => void>();
+
+export function setMemoryStats(stats: MemoryStats): void {
+  memoryStats = stats;
+  for (const fn of memorySubscribers) fn(stats);
+}
+
+export function getMemoryStats(): MemoryStats | null {
+  return memoryStats;
+}
+
+export function subscribeMemoryStats(fn: (stats: MemoryStats) => void): () => void {
+  memorySubscribers.add(fn);
+  if (memoryStats) fn(memoryStats);
+  return () => memorySubscribers.delete(fn);
+}
+
 export function setFps(value: number): void {
   fpsValue = value;
   for (const fn of fpsSubscribers) fn(value);

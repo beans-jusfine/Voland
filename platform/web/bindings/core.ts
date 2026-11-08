@@ -25,6 +25,10 @@ export interface SwitchCoreExports {
   readonly _emulator_set_paused_ffi: (paused: number) => number;   /* 1 success, 0 failure */
 
   readonly _layout_get_ffi:      () => number; /* Memory_Layout* in linear memory */
+  readonly _emulator_guest_ram_total_ffi:     () => bigint;
+  readonly _emulator_guest_ram_allocated_ffi: () => bigint;
+  readonly _emulator_guest_ram_free_ffi:      () => bigint;
+  readonly _emulator_guest_ram_peak_ffi:      () => bigint;
   readonly _cpu_backend_id_ffi:  () => number; /* CpuBackendId */
 
   readonly _cpu_get_reg_ffi: (index: number) => bigint;

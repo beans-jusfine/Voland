@@ -15,7 +15,7 @@ import type { CPUToMainMessage, GPUToMainMessage, MainToCPUMessage, MainToGPUMes
 import type { MemoryLayout } from "@bindings/layout";
 import { detectCapabilities, type PlatformCapabilities } from "./capabilities";
 import { publishBootMilestone, publishLayoutMilestone } from "./e2e-hooks";
-import { appendLogLine, setFps, setStatus } from "./log";
+import { appendLogLine, setFps, setMemoryStats, setStatus } from "./log";
 import { createSharedMemory, TOTAL_MEMORY_BYTES, TOTAL_MEMORY_PAGES } from "./memory";
 
 const WORKER_READY_TIMEOUT_MS = 10_000;
@@ -217,6 +217,10 @@ async function boot(): Promise<BootResult | null> {
 
   const cpuReady = new Promise<void>((resolve) => {
     attachWorkerLogRelay<CPUToMainMessage>("cpu", cpuWorker, msg => {
+      if (msg.type === "memory-stats") {
+        setMemoryStats({ ...msg, wasmMemoryBytes: memory.buffer.byteLength });
+        return;
+      }
       if (msg.type === "layout") {
         layout = msg.layout;
         appendLogLine("info", `layout handshake: guestRamBase=0x${layout.guestRamBase.toString(16)}`);
