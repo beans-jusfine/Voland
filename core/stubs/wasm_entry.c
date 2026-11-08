@@ -14,7 +14,6 @@
 #define DEMO_FRAME_WIDTH 32u
 #define DEMO_FRAME_HEIGHT 32u
 #define DEMO_FRAME_BYTES (DEMO_FRAME_WIDTH * DEMO_FRAME_HEIGHT * 4u)
-#define DEMO_FRAME_LOOP_OFFSET (4u * (2u + 3u * DEMO_FRAME_WIDTH * DEMO_FRAME_HEIGHT))
 #define FRAMEBUFFER_HEADER_BYTES 128u
 #define FRAMEBUFFER_MAX_WIDTH 1920u
 #define FRAMEBUFFER_MAX_HEIGHT 1080u
@@ -42,16 +41,12 @@ EXPORT void emulator_destroy_ffi(void) {
   if (!g_initialised) return;
   emulator_destroy(&g_emulator); g_initialised = 0;
 }
-/* Copy pixels written by the guest NRO into the shared presentation
- * slot only after its final store has executed. The demo's .data segment
- * is the guest-owned 32x32 RGBA8 framebuffer; this function transports it,
- * but never synthesizes or modifies its pixels. */
+/* Copy the guest-owned 32x32 RGBA8 framebuffer into the shared presentation
+ * slot after each guest execution slice. Demo NROs keep the pixels in their
+ * .data segment; this function transports them but never synthesizes them. */
 static void publish_guest_frame_if_ready(void) {
   if (!g_initialised || !g_emulator.program_loaded ||
       g_emulator.process.module_count == 0) return;
-  const uint64_t loop_pc = g_emulator.process.entry_point + DEMO_FRAME_LOOP_OFFSET;
-  if (g_emulator.cpu_backend->get_pc(g_emulator.cpu_state) != loop_pc) return;
-
   const Process_Module *module = &g_emulator.process.modules[0];
   if (module->data.size < DEMO_FRAME_BYTES) return;
   uint8_t guest_pixels[DEMO_FRAME_BYTES];

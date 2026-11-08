@@ -82,8 +82,8 @@ function App(props: AppProps) {
             <div class="voland-file-name">{selectedNro()?.name ?? "No NRO selected"}</div>
             <button class="voland-load-button" type="button" disabled={!selectedNro()}
               onClick={() => { const file = selectedNro(); if (file) props.onLoadNro(file); }}>Load NRO</button>
-            <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-pixels-demo.nro`} download="voland-demo.nro">Download Voland pixel demo NRO</a>
-            <p class="voland-loader-note">This demo draws a 32×32 RGBA8 image using ARM64 instructions. The CPU worker copies the guest-owned pixels into the shared framebuffer for WebGPU presentation.</p>
+            <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-animation-demo.nro`} download="voland-animation-demo.nro">Download Voland animation demo NRO</a>
+            <p class="voland-loader-note">This demo animates a 5×5 square across a 32×32 RGBA8 framebuffer using guest ARM64 instructions. The CPU worker copies guest-owned pixels after each execution slice for WebGPU presentation.</p>
           </section>
 
           <section class="voland-panel voland-log">
