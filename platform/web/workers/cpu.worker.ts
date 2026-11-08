@@ -40,6 +40,7 @@ async function loadCoreModule(memory: WebAssembly.Memory): Promise<SwitchCoreExp
 }
 
 let core: SwitchCoreExports | null = null;
+let wasmMemory: WebAssembly.Memory | null = null;
 let paused = false;
 let halted = false;
 let tickScheduled = false;
@@ -61,6 +62,7 @@ function scheduleExecutionTick(): void {
 }
 
 async function init(memory: WebAssembly.Memory): Promise<void> {
+  wasmMemory = memory;
   log("info", "cpu.worker initialising");
 
   try {
@@ -138,7 +140,8 @@ self.addEventListener("message", (event: MessageEvent<MainToCPUMessage>) => {
     const ptr = core._malloc(msg.buffer.byteLength);
     if (!ptr) { log("error", `not enough WASM memory to stage ${msg.name}`); return; }
     try {
-      core.HEAPU8.set(new Uint8Array(msg.buffer), ptr >>> 0);
+      if (!wasmMemory) throw new Error("shared WASM memory is unavailable");
+      new Uint8Array(wasmMemory.buffer).set(new Uint8Array(msg.buffer), ptr >>> 0);
       const result = core._emulator_load_nro_ffi(ptr, msg.buffer.byteLength);
       if (result === 0) log("info", `loaded ${msg.name}; main homebrew thread is running`);
       else log("error", `could not load ${msg.name} (loader result ${result}); see core diagnostics above`);

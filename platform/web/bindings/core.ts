@@ -21,7 +21,6 @@ export interface SwitchCoreExports {
   readonly _emulator_load_nro_ffi: (dataPtr: number, size: number) => number;
   readonly _malloc: (size: number) => number;
   readonly _free: (ptr: number) => void;
-  readonly HEAPU8: Uint8Array;
   readonly _emulator_set_paused_ffi: (paused: number) => number;   /* 1 success, 0 failure */
 
   readonly _layout_get_ffi:      () => number; /* Memory_Layout* in linear memory */
