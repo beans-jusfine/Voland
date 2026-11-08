@@ -108,6 +108,7 @@ function App(props: AppProps) {
   const [status, setStatusSig] = createSignal(getStatus());
   const [selectedNro, setSelectedNro] = createSignal<File | null>(null);
   const [showFps, setShowFps] = createSignal(false);
+  const [showGoHome, setShowGoHome] = createSignal(false);
   const [fps, setFps] = createSignal(getFps());
   const [memoryStats, setMemoryStats] = createSignal(getMemoryStats());
   const [launching, setLaunching] = createSignal("");
@@ -228,6 +229,10 @@ function App(props: AppProps) {
             <div class="voland-feature-art"><div class="voland-feature-orbit orbit-one" /><div class="voland-feature-orbit orbit-two" /><div class="voland-feature-cube">V</div><span class="voland-feature-label">VOLAND HOME</span></div>
             <div class="voland-feature-copy"><p class="voland-eyebrow">FEATURED DEMO</p><h2>Bouncing Square</h2><p>Our first continuously animated homebrew demo. Smooth motion, real guest framebuffer output.</p><div class="voland-feature-meta"><span>96 × 54 FRAMEBUFFER</span><span>58–60 FPS</span></div><button class="voland-primary-button" disabled={!!launching()} onClick={() => void launchDemo("voland-bouncing.nro")}>{launching() === "voland-bouncing.nro" ? "STARTING…" : "▶  PLAY DEMO"}</button></div>
           </section>
+          <section class="voland-home-menu-option">
+            <div><strong>Show “Go to HOME Menu”</strong><small>When enabled, the emulator menu gets a shortcut back to the Voland HOME screen.</small></div>
+            <label class="voland-toggle"><input type="checkbox" checked={showGoHome()} onChange={(event) => setShowGoHome(event.currentTarget.checked)} /><span class="voland-toggle-track" /><span class="voland-toggle-label">{showGoHome() ? "ON" : "OFF"}</span></label>
+          </section>
           <section class="voland-section">
             <div class="voland-section-title"><div><p class="voland-eyebrow">QUICK ACCESS</p><h2>Recently available</h2></div><button class="voland-text-button" onClick={() => setPage("library")}>VIEW LIBRARY <span>→</span></button></div>
             <div class="voland-game-grid">
@@ -255,6 +260,7 @@ function App(props: AppProps) {
             <div class="voland-facts"><div><dt>CPU backend</dt><dd>{props.cpuBackend}</dd></div><div><dt>GPU adapter</dt><dd>{props.adapterLabel}</dd></div><div><dt>Guest RAM</dt><dd>{props.guestRamMiB} MiB</dd></div></div>
           </section>
           <aside class="voland-sidebar">
+            <section class="voland-panel voland-navigation-panel"><div class="voland-panel-heading"><h2>Navigation</h2><span>MENU</span></div><label class="voland-toggle"><input type="checkbox" checked={showGoHome()} onChange={(event) => setShowGoHome(event.currentTarget.checked)} /><span class="voland-toggle-track" /><span class="voland-toggle-label">{showGoHome() ? "ON" : "OFF"}</span><strong>Show “Go to HOME Menu”</strong></label>{showGoHome() && <button class="voland-home-menu-button" type="button" onClick={() => setPage("home")}>⌂ GO TO HOME MENU</button>}<p class="voland-loader-note">Returns to Voland’s HOME-style launcher. Real Nintendo HOME Menu boot support is still in development.</p></section>
             <section class="voland-panel voland-loader"><div class="voland-panel-heading"><h2>Homebrew loader</h2><span>NRO</span></div><label class="voland-file-label" for="nro-file">Choose a homebrew file</label><input id="nro-file" class="voland-file-input" type="file" accept=".nro,application/octet-stream" onChange={(event) => setSelectedNro(event.currentTarget.files?.[0] ?? null)} /><div class="voland-file-name">{selectedNro()?.name ?? "No NRO selected"}</div><button class="voland-load-button" type="button" disabled={!selectedNro()} onClick={loadSelected}>Load NRO</button><For each={demos}>{(demo) => <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/${demo.file}`} download={demo.file}>Download {demo.name}</a>}</For><p class="voland-loader-note">NRO homebrew runs in the guest CPU. Your files stay in this browser session.</p></section>
             <section class="voland-panel voland-log"><div class="voland-panel-heading"><h2>Event log</h2><span>LIVE</span></div><div class="voland-log-scroll"><For each={logs()}>{(entry) => <p class={`log-line log-${entry.level}`}>{`[${entry.level.toUpperCase().padEnd(5, " ")}] ${entry.message}`}</p>}</For></div></section>
           </aside>
