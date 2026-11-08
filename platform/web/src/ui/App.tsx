@@ -82,6 +82,7 @@ function App(props: AppProps) {
             <button class="voland-load-button" type="button" disabled={!selectedNro()}
               onClick={() => { const file = selectedNro(); if (file) props.onLoadNro(file); }}>Load NRO</button>
             <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-visual-diagnostic.nro`} download="voland-visual-diagnostic.nro">Download moving-shapes visual diagnostic NRO</a>
+            <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-calibration.nro`} download="voland-calibration.nro">Download square-and-circle calibration NRO</a>
             <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-particle-storm.nro`} download="voland-particle-storm.nro">Download Particle Storm stress-test NRO</a>
             <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-animation-demo.nro`} download="voland-animation-demo.nro">Download simple animation demo NRO</a>
             <p class="voland-loader-note">The visual diagnostic draws large moving magenta, cyan and yellow shapes into a VFB1 RGBA8 framebuffer. Use it to distinguish guest execution and framebuffer updates from subtle demo animation.</p>
