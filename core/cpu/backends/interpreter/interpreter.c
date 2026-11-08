@@ -50,6 +50,23 @@ static void set_nz(InterpreterState *s, uint64_t value, bool is64) {
   s->regs.pstate = (s->regs.pstate & 0x3fffffffu) |
       (n ? 0x80000000u : 0u) | (z ? 0x40000000u : 0u);
 }
+static void set_nzcv_addsub(InterpreterState *s, uint64_t a,
+                              uint64_t b, uint64_t result, bool is64,
+                              bool subtract) {
+  const unsigned sign_bit = is64 ? 63u : 31u;
+  const uint64_t mask = is64 ? UINT64_MAX : UINT32_MAX;
+  const uint64_t sign = UINT64_C(1) << sign_bit;
+  a &= mask; b &= mask; result &= mask;
+  const bool n = (result & sign) != 0;
+  const bool z = result == 0;
+  const bool c = subtract ? (a >= b) : (result < a);
+  const bool v = subtract ? (((a ^ b) & (a ^ result) & sign) != 0)
+                          : (((~(a ^ b)) & (a ^ result) & sign) != 0);
+  s->regs.pstate = (s->regs.pstate & 0x0fffffffu) |
+      (n ? 0x80000000u : 0u) | (z ? 0x40000000u : 0u) |
+      (c ? 0x20000000u : 0u) | (v ? 0x10000000u : 0u);
+}
+
 static bool condition_passed(uint32_t flags, unsigned cond) {
   const bool n=(flags>>31)&1u, z=(flags>>30)&1u;
   const bool c=(flags>>29)&1u, v=(flags>>28)&1u;
@@ -183,6 +200,28 @@ static bool execute_one(InterpreterState *s) {
       s->regs.pstate=(s->regs.pstate&0xcfffffffu)|(carry?0x20000000u:0u)|(overflow?0x10000000u:0u);
     }
     (void)b; return true;
+  }
+
+  /* ADD / SUB (shifted register), including ADDS/SUBS and CMP aliases. */
+  if ((insn & 0x1f200000u)==0x0b000000u) {
+    const bool is64=(insn>>31)!=0, sub=((insn>>30)&1u)!=0;
+    const bool set=((insn>>29)&1u)!=0;
+    const unsigned shift=(insn>>22)&3u, rm=(insn>>16)&31u;
+    const unsigned amount=(insn>>10)&63u, rn=(insn>>5)&31u, rd=insn&31u;
+    const unsigned width=is64?64u:32u;
+    if (shift==3u || amount>=width) goto undefined;
+    uint64_t right=read_reg(s,rm,is64,false);
+    if (shift==0u) right <<= amount;
+    else if (shift==1u) right >>= amount;
+    else if (amount!=0u) {
+      if (is64) right=(uint64_t)((int64_t)right >> amount);
+      else right=(uint32_t)((int32_t)right >> amount);
+    }
+    const uint64_t left=read_reg(s,rn,is64,false);
+    const uint64_t result=sub?left-right:left+right;
+    write_reg(s,rd,result,is64,false);
+    if (set) set_nzcv_addsub(s,left,right,result,is64,sub);
+    return true;
   }
 
   /* Logical shifted-register: AND/ORR/EOR/ANDS and inverted forms. */
