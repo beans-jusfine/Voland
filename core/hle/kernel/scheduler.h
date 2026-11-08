@@ -18,6 +18,7 @@ typedef struct Scheduler {
  const CPU_Backend *backend; Scheduler_Thread threads[SCHEDULER_MAX_THREADS];
  uint32_t thread_count, next_slot, tie_cursor[SCHEDULER_VIRTUAL_CORE_COUNT];
  uint64_t next_id, round, virtual_time_cycles;
+ bool paused;
 } Scheduler;
 typedef struct Scheduler_Tick_Result {
  uint32_t cores_run, idle_cores, faulted_threads; uint64_t guest_cycles_executed, virtual_time_cycles;
@@ -28,6 +29,9 @@ Error scheduler_add_thread(Scheduler *scheduler,CPU_State *state,uint32_t priori
 Error scheduler_set_thread_state(Scheduler *scheduler,uint64_t id,Thread_Run_State state);
 Error scheduler_sleep_thread(Scheduler *scheduler,uint64_t id,uint64_t duration_cycles);
 Error scheduler_remove_thread(Scheduler *scheduler,uint64_t id);
+/* Pausing freezes guest execution and virtual time; thread state is preserved. */
+Error scheduler_set_paused(Scheduler *scheduler,bool paused);
+bool scheduler_is_paused(const Scheduler *scheduler);
 Scheduler_Tick_Result scheduler_tick(Scheduler *scheduler);
 const Scheduler_Thread *scheduler_find_thread(const Scheduler *scheduler,uint64_t id);
 #endif
