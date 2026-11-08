@@ -174,7 +174,7 @@ int main(void) {
 
   const uint32_t signed_division_program[] = {
     UINT32_C(0x9ac20c20), /* SDIV X0, X1, X2 */
-    UINT32_C(0x9ac20c41), /* SDIV X1, X2, X2 */
+    UINT32_C(0x9ac20c21), /* SDIV X1, X1, X2 */
   };
   CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0x120, signed_division_program, sizeof(signed_division_program)));
   backend->set_reg(state, 1, (uint64_t)(int64_t)-100);
@@ -185,11 +185,11 @@ int main(void) {
   backend->set_reg(state, 2, UINT64_MAX);
   backend->set_pc(state, CODE_GVA + 0x124);
   CHECK(backend->step(state) == CPU_EXIT_CYCLES_ELAPSED);
-  CHECK(backend->get_reg(state, 1) == (uint64_t)-1);
+  CHECK(backend->get_reg(state, 1) == UINT64_C(100));
 
   const uint32_t division_edges[] = {
     UINT32_C(0x9ac20820), /* UDIV X0, X1, X2: zero divisor */
-    UINT32_C(0x9ac20c41), /* SDIV X1, X2, X2: INT64_MIN / -1 */
+    UINT32_C(0x9ac20c21), /* SDIV X1, X1, X2: INT64_MIN / -1 */
   };
   CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0x130, division_edges, sizeof(division_edges)));
   backend->set_reg(state, 1, UINT64_C(123));
