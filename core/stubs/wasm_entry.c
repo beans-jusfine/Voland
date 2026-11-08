@@ -24,6 +24,7 @@ EXPORT int emulator_run_ffi(uint64_t cycle_budget);
 EXPORT int emulator_step_ffi(void);
 EXPORT int emulator_set_paused_ffi(int paused);
 EXPORT int emulator_load_nro_ffi(uintptr_t data_ptr, uint32_t size);
+EXPORT uint32_t emulator_get_last_nro_error_ffi(uintptr_t out_ptr, uint32_t capacity);
 EXPORT uint64_t cpu_get_reg_ffi(uint32_t index);
 EXPORT void cpu_set_reg_ffi(uint32_t index, uint64_t value);
 EXPORT uint64_t cpu_get_pc_ffi(void);
