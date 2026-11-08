@@ -17,7 +17,7 @@ function log(level: "debug" | "info" | "warn" | "error", message: string): void 
 const DISPLAY_WIDTH = 1280;
 const DISPLAY_HEIGHT = 720;
 
-const DISPLAY_SHADER = /* wgsl */ \`
+const DISPLAY_SHADER = /* wgsl */ `
 struct VertexOutput {
   @builtin(position) position: vec4f,
 };
@@ -65,10 +65,10 @@ fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
 
   return vec4f(color, 1.0);
 }
-\`;
+`;
 
 async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout: MemoryLayout): Promise<void> {
-  log("debug", \`layout handshake: framebufferSlotBase=0x\${layout.framebufferSlotBase.toString(16)}\`);
+  log("debug", `layout handshake: framebufferSlotBase=0x${layout.framebufferSlotBase.toString(16)}`);
   void memory; // guest framebuffer-slot presentation arrives with Maxwell emulation
 
   if (!("gpu" in navigator)) {
@@ -121,7 +121,7 @@ async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout:
   pass.end();
   device.queue.submit([encoder.finish()]);
 
-  log(\`info\`, \`WebGPU display test rendered (\${DISPLAY_WIDTH}x\${DISPLAY_HEIGHT}), format=\${format}\`);
+  log(`info`, `WebGPU display test rendered (${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}), format=${format}`);
   const ready: GPUToMainMessage = {
     type: "ready",
     adapterName: ((adapter as unknown as { info?: { vendor?: string } }).info?.vendor) ?? null,
@@ -134,7 +134,7 @@ self.addEventListener("message", (event: MessageEvent<MainToGPUMessage>) => {
     init(event.data.canvas, event.data.memory, event.data.layout).catch((e: unknown) => {
       const err: GPUToMainMessage = {
         type: "error",
-        message: \`init threw: \${e instanceof Error ? e.message : String(e)}\`,
+        message: `init threw: ${e instanceof Error ? e.message : String(e)}`,
       };
       self.postMessage(err);
     });
