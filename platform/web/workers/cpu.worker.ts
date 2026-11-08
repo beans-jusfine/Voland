@@ -44,6 +44,7 @@ let wasmMemory: WebAssembly.Memory | null = null;
 let paused = false;
 let halted = false;
 let tickScheduled = false;
+let demoExecutionCheckPending = false;
 const SCHEDULER_CYCLE_BUDGET = 10_000n;
 const WORKER_TICK_INTERVAL_MS = 16;
 
@@ -56,6 +57,16 @@ function scheduleExecutionTick(): void {
     if (!paused) {
       const reason = core._emulator_run_ffi(SCHEDULER_CYCLE_BUDGET);
       if (reason === 4) log("warn", "scheduler stopped a guest thread after a CPU fault");
+      if (demoExecutionCheckPending) {
+        demoExecutionCheckPending = false;
+        const x0 = core._cpu_get_reg_ffi(0);
+        const pc = core._cpu_get_pc_ffi();
+        if (x0 === 42n && pc !== 0n) {
+          log("info", `ARM64 execution verified: X0=42, PC=0x${pc.toString(16)}`);
+        } else {
+          log("warn", `demo execution check did not match yet: X0=${x0}, PC=0x${pc.toString(16)}`);
+        }
+      }
     }
     scheduleExecutionTick();
   }, WORKER_TICK_INTERVAL_MS);
@@ -143,7 +154,10 @@ self.addEventListener("message", (event: MessageEvent<MainToCPUMessage>) => {
       if (!wasmMemory) throw new Error("shared WASM memory is unavailable");
       new Uint8Array(wasmMemory.buffer).set(new Uint8Array(msg.buffer), ptr >>> 0);
       const result = core._emulator_load_nro_ffi(ptr, msg.buffer.byteLength);
-      if (result === 0) log("info", `loaded ${msg.name}; main homebrew thread is running`);
+      if (result === 0) {
+        log("info", `loaded ${msg.name}; main homebrew thread is running`);
+        demoExecutionCheckPending = msg.name === "voland-demo.nro";
+      }
       else log("error", `could not load ${msg.name} (loader result ${result}); see core diagnostics above`);
     } finally { core._free(ptr); }
     return;
