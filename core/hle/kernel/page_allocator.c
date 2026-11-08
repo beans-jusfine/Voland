@@ -26,6 +26,8 @@ Error page_allocator_init(Page_Allocator *out, uint64_t base_pa, uint64_t size_b
   out->base_pa = base_pa;
   out->size_bytes = size_bytes;
   out->used_bytes = 0;
+  out->allocated_bytes = 0;
+  out->peak_allocated_bytes = 0;
   out->free_run_count = 0;
   return OK;
 }
@@ -60,6 +62,9 @@ Error page_allocator_allocate(Page_Allocator *allocator, uint64_t page_count,
       const Error committed = layout_guest_ram_commit(run->pa, page_count << VMM_PAGE_BITS);
       if (!error_is_ok(committed)) return committed;
       *out_pa = run->pa;
+      allocator->allocated_bytes += page_count << VMM_PAGE_BITS;
+      if (allocator->allocated_bytes > allocator->peak_allocated_bytes)
+        allocator->peak_allocated_bytes = allocator->allocated_bytes;
       if (run->page_count == page_count) {
         allocator->free_runs[i] = allocator->free_runs[--allocator->free_run_count];
       } else {
@@ -84,6 +89,9 @@ Error page_allocator_allocate(Page_Allocator *allocator, uint64_t page_count,
   if (!error_is_ok(committed)) return committed;
   *out_pa = pa;
   allocator->used_bytes += page_count << VMM_PAGE_BITS;
+  allocator->allocated_bytes += page_count << VMM_PAGE_BITS;
+  if (allocator->allocated_bytes > allocator->peak_allocated_bytes)
+    allocator->peak_allocated_bytes = allocator->allocated_bytes;
   return OK;
 }
 
@@ -114,6 +122,7 @@ Error page_allocator_free(Page_Allocator *allocator, uint64_t pa, uint64_t page_
   const uint64_t cursor = allocator->base_pa + allocator->used_bytes;
 
   if (end == cursor) {
+    allocator->allocated_bytes -= size_bytes;
     /* Retracts the cursor directly rather than entering the freelist, so
      * a shrink-then-regrow of the same tail never costs freelist
      * capacity. Then one absorption pass: if a freelist run now ends
@@ -141,11 +150,13 @@ Error page_allocator_free(Page_Allocator *allocator, uint64_t pa, uint64_t page_
   for (uint32_t i = 0; i < allocator->free_run_count; i++) {
     Page_Run *run = &allocator->free_runs[i];
     if (run->pa == end) {
+      allocator->allocated_bytes -= size_bytes;
       run->pa = pa;
       run->page_count += page_count;
       return OK;
     }
     if (run->pa + (run->page_count << VMM_PAGE_BITS) == pa) {
+      allocator->allocated_bytes -= size_bytes;
       run->page_count += page_count;
       return OK;
     }
@@ -154,6 +165,7 @@ Error page_allocator_free(Page_Allocator *allocator, uint64_t pa, uint64_t page_
     return ERR(RESULT_OUT_OF_MEMORY, "page_allocator_free: freelist full");
   }
   allocator->free_runs[allocator->free_run_count++] = (Page_Run){.pa = pa, .page_count = page_count};
+  allocator->allocated_bytes -= size_bytes;
   return OK;
 }
 
@@ -169,5 +181,7 @@ uint64_t page_allocator_free_bytes(const Page_Allocator *allocator) {
 void page_allocator_reset(Page_Allocator *allocator) {
   if (!allocator) return;
   allocator->used_bytes = 0;
+  allocator->allocated_bytes = 0;
+  allocator->peak_allocated_bytes = 0;
   allocator->free_run_count = 0;
 }
