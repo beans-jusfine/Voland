@@ -21,8 +21,18 @@ fn vertexMain(@builtin(vertex_index) index: u32) -> VertexOutput {
 }
 @fragment
 fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
-  let uv = position.xy / vec2f(1280.0,720.0);
-  return textureSample(frameTexture,frameSampler,uv);
+  // Fit the guest image inside the 16:9 output without stretching its pixels.
+  let sourceSize = vec2f(textureDimensions(frameTexture));
+  let outputSize = vec2f(1280.0, 720.0);
+  let fitScale = min(outputSize.x / sourceSize.x, outputSize.y / sourceSize.y);
+  let fittedSize = sourceSize * fitScale;
+  let origin = (outputSize - fittedSize) * 0.5;
+  if (position.x < origin.x || position.y < origin.y ||
+      position.x >= origin.x + fittedSize.x || position.y >= origin.y + fittedSize.y) {
+    return vec4f(0.0, 0.0, 0.0, 1.0);
+  }
+  let uv = (position.xy - origin) / fittedSize;
+  return textureSample(frameTexture, frameSampler, uv);
 }`;
 async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout: MemoryLayout): Promise<void> {
   if (!("gpu" in navigator)) throw new Error("WebGPU unavailable inside worker");
