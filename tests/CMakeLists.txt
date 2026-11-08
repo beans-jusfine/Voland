@@ -98,3 +98,8 @@ add_test(NAME sm_test COMMAND sm_test)
 add_executable(svc_ipc_test svc_ipc_test.c)
 target_link_libraries(svc_ipc_test PRIVATE switch_core loader_fixtures)
 add_test(NAME svc_ipc_test COMMAND svc_ipc_test)
+
+# End-to-end NRO fixture: parse, map, and execute ARM64 code through the scheduler.
+add_executable(nro_execution_test nro_execution_test.c)
+target_link_libraries(nro_execution_test PRIVATE switch_core)
+add_test(NAME nro_execution_test COMMAND nro_execution_test)
