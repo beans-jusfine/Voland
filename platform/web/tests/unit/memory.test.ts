@@ -30,11 +30,11 @@ test("CMakeLists.txt derives Emscripten memory from the shared page-count settin
   assert.equal(TOTAL_MEMORY_BYTES, 4_294_901_760);
 });
 
-test("GitHub Pages uses the same 1.5 GiB / 512 MiB development profile in both builds", () => {
+test("Vercel production uses the same 2 GiB / 1 GiB Chromebook profile in both builds", () => {
   const workflow = repoFile(".github/workflows/pages.yml");
-  assert.match(workflow, /VOLAND_WEB_MEMORY_PAGES=24576/);
-  assert.match(workflow, /VOLAND_WEB_GUEST_RAM_MIB=512/);
-  assert.match(workflow, /VOLAND_WEB_MEMORY_PAGES: 24576/);
+  assert.match(workflow, /VOLAND_WEB_MEMORY_PAGES=32768/);
+  assert.match(workflow, /VOLAND_WEB_GUEST_RAM_MIB=1024/);
+  assert.match(workflow, /VOLAND_WEB_MEMORY_PAGES: 32768/);
 });
 
 test("CMakeLists.txt builds wasm32: no -m64 or MEMORY64 codegen flag (§24)", () => {
