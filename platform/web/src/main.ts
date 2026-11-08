@@ -20,6 +20,20 @@ import { createSharedMemory, TOTAL_MEMORY_BYTES, TOTAL_MEMORY_PAGES } from "./me
 
 const WORKER_READY_TIMEOUT_MS = 10_000;
 
+/* Set right before the one self-correcting reload below, and cleared as
+ * soon as isolation is actually confirmed (boot()'s crossOriginIsolated
+ * check). Scoping it to "since the last success" rather than "ever, for
+ * the life of this tab" matters: without the clear, the very first
+ * transient failure after a successful boot - a redeploy's SW update
+ * racing a refresh, a BFCache restore, anything - permanently latches
+ * the fatal message for the rest of the tab's session, since nothing
+ * else ever removes the flag and sessionStorage survives reloads (only
+ * a tab/window close clears it). Clearing on success keeps the original
+ * one-reload-per-failure bound (so permanently broken hosting still
+ * can't loop forever) while letting the page self-heal again the next
+ * time isolation is lost, instead of only ever getting one try per tab. */
+const COI_RELOAD_FLAG = "voland-coi-controlled-reload-attempted";
+
 function fatal(reason: string): void {
   setStatus(`fatal: ${reason}`);
   appendLogLine("error", reason);
@@ -72,8 +86,8 @@ async function reloadOnceForCrossOriginIsolation(): Promise<boolean> {
   if (!navigator.serviceWorker.controller) {
     throw new Error("Service Worker still does not control this page; refusing to reload without COOP/COEP headers.");
   }
-  if (sessionStorage.getItem("voland-coi-controlled-reload-attempted")) return false;
-  sessionStorage.setItem("voland-coi-controlled-reload-attempted", "1");
+  if (sessionStorage.getItem(COI_RELOAD_FLAG)) return false;
+  sessionStorage.setItem(COI_RELOAD_FLAG, "1");
   location.reload();
   return true;
 }
@@ -144,6 +158,10 @@ async function boot(): Promise<BootResult | null> {
           "COOP: same-origin and COEP: require-corp (§16).");
     return null;
   }
+  // Isolation holds on this load: forgive any earlier failed attempt so a
+  // future loss of isolation (not just the very first one) gets its own
+  // self-correcting reload instead of going straight to the fatal path.
+  sessionStorage.removeItem(COI_RELOAD_FLAG);
 
   const caps = detectCapabilities();
   reportCapabilities(caps);
