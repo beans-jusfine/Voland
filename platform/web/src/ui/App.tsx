@@ -113,7 +113,8 @@ function App(props: AppProps) {
   const [emulatorStopped, setEmulatorStopped] = createSignal(false);
   const [firmwareInfo, setFirmwareInfo] = createSignal<FirmwareManifest | null>(null);
   const [firmwareStatus, setFirmwareStatus] = createSignal("No firmware folder imported.");
-  const [firmwareBusy, setFirmwareBusy] = createSignal(false);\n  let firmwarePicker: HTMLInputElement | undefined;
+  const [firmwareBusy, setFirmwareBusy] = createSignal(false);
+  let firmwarePicker: HTMLInputElement | undefined;
 
   onMount(() => {
     const offLogs = subscribeLogs((entry) => {
@@ -125,6 +126,8 @@ function App(props: AppProps) {
     });
     const offStatus = subscribeStatus((text) => setStatusSig(text));
     const offFps = subscribeFps((value) => setFps(value));
+    // Load previously stored firmware info from OPFS
+    ;(async () => { const manifest = await readFirmwareManifest(); if (manifest) setFirmwareInfo(manifest); })();
     onCleanup(() => { offLogs(); offStatus(); offFps(); });
   });
 
