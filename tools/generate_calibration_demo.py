@@ -18,6 +18,10 @@ def movk_w16(imm):
     return 0x72a00000 | ((imm & 0xffff) << 5)
 
 
+def movz_w_reg(rd, imm):
+    return 0x52800000 | ((imm & 0xffff) << 5) | rd
+
+
 def str_w(index):
     return 0xb9000000 | ((index & 0xfff) << 10) | (1 << 5)
 
@@ -73,7 +77,7 @@ code.extend((movz_w(1), 0xb9001280))  # STR W0, [X20, #16]
 marker_x, marker_y, marker_size = 84, 3, 5
 marker_index = marker_y * W + marker_x
 code.extend((add_x_imm(1, 20, HEADER_SIZE + marker_index * 4),
-             movz_w(10, 0), movz_w(11, 1)))
+             movz_w_reg(10, 0), movz_w_reg(11, 1)))
 
 wait_index = len(code)
 code.append(0xb9400000 | (4 << 10) | (20 << 5) | 9)  # LDR W9, [X20, #16]
