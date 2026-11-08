@@ -161,7 +161,21 @@ self.addEventListener("message", (event: MessageEvent<MainToCPUMessage>) => {
           log("info", "demo NRO is executing its guest-side pixel drawing routine");
         }
       }
-      else log("error", `could not load ${msg.name} (loader result ${result}); see core diagnostics above`);
+      else {
+        const errorBuffer = core._malloc(1024);
+        let detail = "";
+        if (errorBuffer && wasmMemory) {
+          try {
+            const length = core._emulator_get_last_nro_error_ffi(errorBuffer, 1024);
+            if (length > 0) {
+              detail = new TextDecoder().decode(
+                new Uint8Array(wasmMemory.buffer, errorBuffer >>> 0, length),
+              );
+            }
+          } finally { core._free(errorBuffer); }
+        }
+        log("error", `could not load ${msg.name} (loader result ${result})${detail ? `: ${detail}` : ""}`);
+      }
     } finally { core._free(ptr); }
     return;
   }

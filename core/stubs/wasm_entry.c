@@ -85,11 +85,31 @@ EXPORT int emulator_set_paused_ffi(int paused) {
   if (err.code != RESULT_OK) { log_error("[wasm_entry] scheduler pause change failed: %s", err.message); return 0; }
   return 1;
 }
+static const char *g_last_nro_error = "";
+EXPORT uint32_t emulator_get_last_nro_error_ffi(uintptr_t out_ptr, uint32_t capacity) {
+  if (!out_ptr || capacity == 0) return 0;
+  uint8_t *out = (uint8_t *)out_ptr;
+  uint32_t length = 0;
+  while (g_last_nro_error[length] != '\\0' && length + 1u < capacity) {
+    out[length] = (uint8_t)g_last_nro_error[length];
+    length++;
+  }
+  out[length] = 0;
+  return length;
+}
 EXPORT int emulator_load_nro_ffi(uintptr_t data_ptr, uint32_t size) {
-  if (!g_initialised || data_ptr == 0 || size == 0) return RESULT_INVALID_ARGUMENT;
+  g_last_nro_error = "";
+  if (!g_initialised || data_ptr == 0 || size == 0) {
+    g_last_nro_error = "NRO load rejected: core is not initialised or input is empty";
+    return RESULT_INVALID_ARGUMENT;
+  }
   const Byte_Source source = byte_source_from_memory((const void *)data_ptr, size);
   const Error err = emulator_load_nro(&g_emulator, &source, 0);
-  if (err.code != RESULT_OK) { log_error("[wasm_entry] NRO load failed (%d): %s", (int)err.code, err.message); return (int)err.code; }
+  if (err.code != RESULT_OK) {
+    g_last_nro_error = err.message ? err.message : "NRO loader returned an error without a message";
+    log_error("[wasm_entry] NRO load failed (%d): %s", (int)err.code, g_last_nro_error);
+    return (int)err.code;
+  }
   return RESULT_OK;
 }
 EXPORT int emulator_step_ffi(void) {
