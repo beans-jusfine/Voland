@@ -98,6 +98,33 @@ int main(void) {
   CHECK(backend->get_reg(state, 6) == UINT64_C(0x800000000000000f));
   CHECK(backend->get_reg(state, 7) == UINT64_C(0x800000000000000f));
 
+  /* ADD/SUB shifted-register forms and NZCV flag behavior. */
+  const uint32_t arithmetic_program[] = {
+    UINT32_C(0x8b020828), /* ADD X8, X1, X2, LSL #2 */
+    UINT32_C(0xcb420429), /* SUB X9, X1, X2, LSR #1 */
+    UINT32_C(0xab02002a), /* ADDS X10, X1, X2 */
+    UINT32_C(0xeb02002b), /* SUBS X11, X1, X2 */
+  };
+  CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0x80, arithmetic_program, sizeof(arithmetic_program)));
+  backend->set_reg(state, 1, 100);
+  backend->set_reg(state, 2, 7);
+  backend->set_pc(state, CODE_GVA + 0x80);
+  CHECK(backend->run(state, 4) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(backend->get_reg(state, 8) == 128);
+  CHECK(backend->get_reg(state, 9) == 97);
+  CHECK(backend->get_reg(state, 10) == 107);
+  CHECK(backend->get_reg(state, 11) == 93);
+  CHECK((backend->get_pstate(state) & 0xf0000000u) == 0x20000000u);
+
+  /* A subtraction underflow sets N and clears C. */
+  const uint32_t underflow_program[] = { UINT32_C(0xeb02002b) };
+  CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0xc0, underflow_program, sizeof(underflow_program)));
+  backend->set_reg(state, 1, 0);
+  backend->set_reg(state, 2, 1);
+  backend->set_pc(state, CODE_GVA + 0xc0);
+  CHECK(backend->step(state) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK((backend->get_pstate(state) & 0xa0000000u) == 0x80000000u);
+
   /* Unsupported encodings must report the exact instruction and fault
    * instead of silently advancing the guest PC. */
   const uint32_t invalid = UINT32_C(0xffffffff);
