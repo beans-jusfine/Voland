@@ -258,6 +258,14 @@ int main(void) {
   CHECK(backend->step(state) == CPU_EXIT_CYCLES_ELAPSED);
   CHECK((backend->get_pstate(state) & 0xa0000000u) == 0x80000000u);
 
+  /* MRS X9, TPIDRRO_EL0 reads the TLS pointer installed by the kernel. */
+  const uint32_t sysreg_program[] = { UINT32_C(0xd53bd069) };
+  CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0x150, sysreg_program, sizeof(sysreg_program)));
+  backend->set_sys_reg(state, CPU_SYSREG_TPIDRRO_EL0, UINT64_C(0x123456780));
+  backend->set_pc(state, CODE_GVA + 0x150);
+  CHECK(backend->step(state) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(backend->get_reg(state, 9) == UINT64_C(0x123456780));
+
   /* Unsupported encodings must report the exact instruction and fault
    * instead of silently advancing the guest PC. */
   const uint32_t invalid = UINT32_C(0xffffffff);

@@ -363,6 +363,17 @@ static bool execute_one(InterpreterState *s) {
   if ((insn & 0x3b000000u)==0x39000000u && ((insn>>22)&3u)<=1u)
     return load_store(s,insn);
 
+  /* MRS Xt, TPIDRRO_EL0: expose the kernel-provided TLS pointer to guest code. */
+  if ((insn & 0xfff00000u) == 0xd5300000u) {
+    const uint32_t sysreg = insn & 0x001fffe0u;
+    const unsigned rt = insn & 31u;
+    if (sysreg == CPU_SYSREG_TPIDRRO_EL0) {
+      write_reg(s, rt, s->tpidrro_el0, true, false);
+      return true;
+    }
+    goto undefined;
+  }
+
   /* Unsupported instruction: report it instead of silently advancing. */
 undefined:
   s->regs.pc=pc;
