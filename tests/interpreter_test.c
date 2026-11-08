@@ -235,6 +235,20 @@ int main(void) {
   CHECK(backend->run(state, 1) == CPU_EXIT_CYCLES_ELAPSED);
   CHECK(backend->get_reg(state, 3) == UINT64_C(0x123456789abcdef0));
 
+  /* CCMN X1, X1, #4, NE: add and set NZCV when NE holds;
+   * otherwise load the encoded immediate NZCV value (Z=1). */
+  const uint32_t ccmn_program[] = { UINT32_C(0xba411824) };
+  CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0x140, ccmn_program, sizeof(ccmn_program)));
+  backend->set_reg(state, 1, 5);
+  backend->set_pstate(state, 0); /* NE: condition true, 5 + 5 = 10 */
+  backend->set_pc(state, CODE_GVA + 0x140);
+  CHECK(backend->step(state) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK((backend->get_pstate(state) & 0xf0000000u) == 0);
+  backend->set_pstate(state, UINT32_C(0x40000000)); /* NE false: use #4 */
+  backend->set_pc(state, CODE_GVA + 0x140);
+  CHECK(backend->step(state) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK((backend->get_pstate(state) & 0xf0000000u) == 0x40000000u);
+
   /* A subtraction underflow sets N and clears C. */
   const uint32_t underflow_program[] = { UINT32_C(0xeb02002b) };
   CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0xc0, underflow_program, sizeof(underflow_program)));
