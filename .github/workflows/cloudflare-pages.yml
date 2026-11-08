@@ -14,7 +14,7 @@ env:
   EMSDK_VERSION: 6.0.9
   NODE_VERSION: 24
   PNPM_VERSION: 11
-  CLOUDFLARE_PAGES_PROJECT: voland-1qn
+  CLOUDFLARE_PAGES_PROJECT: voland
 
 jobs:
   build-core:
