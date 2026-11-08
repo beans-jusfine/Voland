@@ -116,6 +116,22 @@ int main(void) {
   CHECK(backend->get_reg(state, 11) == 93);
   CHECK((backend->get_pstate(state) & 0xf0000000u) == 0x20000000u);
 
+  /* MADD/MSUB: 64-bit multiply-accumulate and 32-bit result truncation. */
+  const uint32_t multiply_program[] = {
+    UINT32_C(0x9b020c20), /* MADD X0, X1, X2, X3 */
+    UINT32_C(0x9b028c24), /* MSUB X4, X1, X2, X3 */
+    UINT32_C(0x1b020c25), /* MADD W5, W1, W2, W3 */
+  };
+  CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0xa0, multiply_program, sizeof(multiply_program)));
+  backend->set_reg(state, 1, UINT64_C(0x100000002));
+  backend->set_reg(state, 2, 3);
+  backend->set_reg(state, 3, 10);
+  backend->set_pc(state, CODE_GVA + 0xa0);
+  CHECK(backend->run(state, 3) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(backend->get_reg(state, 0) == UINT64_C(0x300000010));
+  CHECK(backend->get_reg(state, 4) == UINT64_C(0xfffffffd00000004));
+  CHECK(backend->get_reg(state, 5) == 16);
+
   /* A subtraction underflow sets N and clears C. */
   const uint32_t underflow_program[] = { UINT32_C(0xeb02002b) };
   CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0xc0, underflow_program, sizeof(underflow_program)));
