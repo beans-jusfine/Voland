@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a static 96x54 square-and-circle calibration framebuffer NRO."""
+"""Generate a static 96x54 VFB2 square-and-circle calibration NRO."""
 import struct
 from pathlib import Path
 
@@ -7,7 +7,7 @@ W, H = 96, 54
 TEXT_OFF = 0x1000
 INSTRUCTIONS = 18000
 CHUNK_PIXELS = 4096
-HEADER_SIZE = 16
+HEADER_SIZE = 20
 
 
 def movz_w(imm):
@@ -52,7 +52,7 @@ for y in range(H):
             distance = (x - cx) ** 2 + (y - cy) ** 2
             if radius * radius - radius <= distance <= radius * radius + radius:
                 r, g, b = color
-        if x == 78 and 4 <= y <= 49 or y == 27 and 72 <= x <= 92:
+        if (x == 78 and 4 <= y <= 49) or (y == 27 and 72 <= x <= 92):
             r, g, b = 90, 255, 120
         pixels.append(rgba(r, g, b))
 
@@ -60,11 +60,13 @@ data_size = HEADER_SIZE + W * H * 4
 text_size = INSTRUCTIONS * 4
 data_off = (TEXT_OFF + text_size + 0xfff) & ~0xfff
 page_delta = (data_off - TEXT_OFF) // 0x1000
-code = [adrp_x(20, page_delta), add_x_imm(20, 20, HEADER_SIZE), 0xaa1403e1]
+code = [adrp_x(20, page_delta), add_x_imm(20, 20, 0), 0xaa1403e1]
 for index, pixel in enumerate(pixels):
     code.extend((movz_w(pixel), movk_w16(pixel >> 16), str_w(index % CHUNK_PIXELS)))
     if index % CHUNK_PIXELS == CHUNK_PIXELS - 1 and index + 1 < W * H:
         code.append(add_x_imm(1, 1, 4, shift12=True))
+# Set frame_ready only after every pixel write has completed.
+code.extend((movz_w(1), 0xb9000a80))  # STR W0, [X20, #16]
 if len(code) + 1 > INSTRUCTIONS:
     raise RuntimeError("calibration frame exceeds instruction budget")
 code.extend([0xd503201f] * (INSTRUCTIONS - len(code) - 1))
@@ -84,13 +86,14 @@ put32(0x20, TEXT_OFF)
 put32(0x24, text_size)
 put32(0x30, data_off)
 put32(0x34, data_size)
-put32(data_off, 0x31424656)  # VFB1
+put32(data_off, 0x32424656)  # VFB2
 put32(data_off + 4, W)
 put32(data_off + 8, H)
 put32(data_off + 12, 1)  # RGBA8
+put32(data_off + 16, 0)  # frame_ready, set by guest after drawing
 cursor = TEXT_OFF
 for instruction in code:
     put32(cursor, instruction)
     cursor += 4
 Path("platform/web/public/homebrew/voland-calibration.nro").write_bytes(image)
-print(f"Wrote {file_size:,} bytes: {W}x{H} square-and-circle calibration image.")
+print(f"Wrote {file_size:,} bytes: {W}x{H} VFB2 calibration image.")
