@@ -67,6 +67,8 @@ async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout:
   const base = layout.framebufferSlotBase;
   const counters = new Uint32Array(memory.buffer, base, 2);
   let presented = 0;
+  let fpsWindowStart = performance.now();
+  let fpsWindowFrames = 0;
   const draw = () => {
     const encoder = device.createCommandEncoder();
     const pass = encoder.beginRenderPass({ colorAttachments: [{
@@ -94,6 +96,7 @@ async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout:
           { offset: 0, bytesPerRow: width * 4, rowsPerImage: height },
           { width, height, depthOrArrayLayers: 1 });
         presented = published;
+        fpsWindowFrames++;
         Atomics.store(counters, 1, published);
         draw();
         log("info", `presented shared framebuffer frame ${published} (${width}x${height}, RGBA8)`);
@@ -101,6 +104,13 @@ async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout:
         log("error", `rejected framebuffer metadata: ${width}x${height}, format=${pixelFormat}, bytes=${byteLength}`);
         presented = published;
       }
+    }
+    const now = performance.now();
+    const elapsed = now - fpsWindowStart;
+    if (elapsed >= 1000) {
+      self.postMessage({ type: "fps", value: Math.round(fpsWindowFrames * 1000 / elapsed) } satisfies GPUToMainMessage);
+      fpsWindowFrames = 0;
+      fpsWindowStart = now;
     }
     self.setTimeout(poll, 16);
   };

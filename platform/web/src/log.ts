@@ -20,6 +20,23 @@ const subscribers = new Set<(entry: LogEntry) => void>();
 let statusText = "booting…";
 const statusSubscribers = new Set<(text: string) => void>();
 
+let fpsValue = 0;
+const fpsSubscribers = new Set<(value: number) => void>();
+
+export function setFps(value: number): void {
+  fpsValue = value;
+  for (const fn of fpsSubscribers) fn(value);
+}
+
+export function getFps(): number {
+  return fpsValue;
+}
+
+export function subscribeFps(fn: (value: number) => void): () => void {
+  fpsSubscribers.add(fn);
+  return () => fpsSubscribers.delete(fn);
+}
+
 function bootLogContainer(): HTMLElement | null {
   return document.getElementById("boot-log");
 }

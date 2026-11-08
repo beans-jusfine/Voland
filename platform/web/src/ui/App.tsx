@@ -3,7 +3,7 @@
  */
 import { For, createSignal, onCleanup, onMount } from "solid-js";
 import type { LogEntry } from "../log";
-import { getLogHistory, getStatus, subscribeLogs, subscribeStatus } from "../log";
+import { getFps, getLogHistory, getStatus, subscribeFps, subscribeLogs, subscribeStatus } from "../log";
 
 interface AppProps {
   readonly adapterLabel: string;
@@ -16,6 +16,8 @@ function App(props: AppProps) {
   const [logs, setLogs] = createSignal<readonly LogEntry[]>(getLogHistory().slice());
   const [status, setStatusSig] = createSignal(getStatus());
   const [selectedNro, setSelectedNro] = createSignal<File | null>(null);
+  const [showFps, setShowFps] = createSignal(false);
+  const [fps, setFps] = createSignal(getFps());
 
   onMount(() => {
     // The canvas is transferred to the GPU worker during boot. Move that same
@@ -32,7 +34,8 @@ function App(props: AppProps) {
       });
     });
     const offStatus = subscribeStatus((text) => setStatusSig(text));
-    onCleanup(() => { offLogs(); offStatus(); });
+    const offFps = subscribeFps((value) => setFps(value));
+    onCleanup(() => { offLogs(); offStatus(); offFps(); });
   });
 
   return (
@@ -52,11 +55,18 @@ function App(props: AppProps) {
               <h1>Emulator display</h1>
               <p>Newly published RGBA8 frames from shared WASM memory appear here.</p>
             </div>
-            <span class="voland-display-state">GPU</span>
+            <div class="voland-display-controls">
+              <button class={`voland-fps-toggle${showFps() ? " is-active" : ""}`} type="button"
+                aria-pressed={showFps()} onClick={() => setShowFps((value) => !value)}>
+                FPS {showFps() ? "ON" : "OFF"}
+              </button>
+              <span class="voland-display-state">GPU</span>
+            </div>
           </div>
           <div class="voland-display-frame">
             <div class="voland-screen">
               <div class="voland-screen-placeholder">Waiting for display output</div>
+              {showFps() && <div class="voland-fps-counter">FPS <strong>{fps()}</strong></div>}
             </div>
           </div>
           <div class="voland-display-caption">

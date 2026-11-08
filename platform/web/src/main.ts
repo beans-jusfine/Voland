@@ -15,7 +15,7 @@ import type { CPUToMainMessage, GPUToMainMessage, MainToCPUMessage, MainToGPUMes
 import type { MemoryLayout } from "@bindings/layout";
 import { detectCapabilities, type PlatformCapabilities } from "./capabilities";
 import { publishBootMilestone, publishLayoutMilestone } from "./e2e-hooks";
-import { appendLogLine, setStatus } from "./log";
+import { appendLogLine, setFps, setStatus } from "./log";
 import { createSharedMemory, TOTAL_MEMORY_BYTES, TOTAL_MEMORY_PAGES } from "./memory";
 
 const WORKER_READY_TIMEOUT_MS = 10_000;
@@ -240,7 +240,9 @@ async function boot(): Promise<BootResult | null> {
 
   const gpuReady = new Promise<void>((resolve) => {
     attachWorkerLogRelay<GPUToMainMessage>("gpu", gpuWorker, msg => {
-      if (msg.type === "ready") {
+      if (msg.type === "fps") {
+        setFps(msg.value);
+      } else if (msg.type === "ready") {
         adapterLabel = msg.adapterName ?? "Software/Unknown";
         appendLogLine("info", `gpu adapter: ${adapterLabel}`);
         gpuSlot = "ready";

@@ -36,5 +36,6 @@ export type MainToGPUMessage =
 
 export type GPUToMainMessage =
   | { readonly type: "ready"; readonly adapterName: string | null }
+  | { readonly type: "fps"; readonly value: number }
   | { readonly type: "log"; readonly level: LogLevel; readonly message: string }
   | { readonly type: "error"; readonly message: string };
