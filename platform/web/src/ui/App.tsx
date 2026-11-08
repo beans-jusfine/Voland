@@ -92,7 +92,8 @@ function App(props: AppProps) {
             <div class="voland-file-name">{selectedNro()?.name ?? "No NRO selected"}</div>
             <button class="voland-load-button" type="button" disabled={!selectedNro()}
               onClick={() => { const file = selectedNro(); if (file) props.onLoadNro(file); }}>Load NRO</button>
-            <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-animation-demo.nro`} download="voland-animation-demo.nro">Download Voland animation demo NRO</a>
+            <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-particle-storm.nro`} download="voland-particle-storm.nro">Download Particle Storm stress-test NRO</a>
+            <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/voland-animation-demo.nro`} download="voland-animation-demo.nro">Download simple animation demo NRO</a>
             <p class="voland-loader-note">Guest homebrew can publish a VFB1 descriptor (width, height, RGBA8 format) followed by its pixels in .data. Voland validates and copies each guest frame into shared memory for WebGPU presentation. Legacy 32×32 demos remain supported.</p>
           </section>
 

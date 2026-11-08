@@ -45,7 +45,7 @@ let paused = false;
 let halted = false;
 let tickScheduled = false;
 let demoExecutionCheckPending = false;
-const SCHEDULER_CYCLE_BUDGET = 10_000n;
+const SCHEDULER_CYCLE_BUDGET = 32_000n;
 const WORKER_TICK_INTERVAL_MS = 16;
 
 function scheduleExecutionTick(): void {
