@@ -158,8 +158,7 @@ self.addEventListener("message", (event: MessageEvent<MainToCPUMessage>) => {
         log("info", `loaded ${msg.name}; main homebrew thread is running`);
         demoExecutionCheckPending = msg.name === "voland-demo.nro";
         if (demoExecutionCheckPending) {
-          if (core._emulator_publish_demo_frame_ffi() === 1) log("info", "published host-generated RGBA8 demo frame to shared framebuffer slot");
-          else log("error", "could not publish demo frame to shared framebuffer slot");
+          log("info", "demo NRO is executing its guest-side pixel drawing routine");
         }
       }
       else log("error", `could not load ${msg.name} (loader result ${result}); see core diagnostics above`);

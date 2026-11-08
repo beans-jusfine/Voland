@@ -35,10 +35,9 @@ async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout:
   if (!context) throw new Error("getContext('webgpu') returned null");
   const format = gpu.getPreferredCanvasFormat();
   context.configure({ device, format, alphaMode: "opaque" });
-  const texture = device.createTexture({
-    label: "Voland shared framebuffer", size: { width: WIDTH, height: HEIGHT },
-    format: "rgba8unorm", usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-  });
+  let texture: GPUTexture;
+  let textureWidth = 0;
+  let textureHeight = 0;
   const sampler = device.createSampler({ magFilter: "linear", minFilter: "linear" });
   const shader = device.createShaderModule({ label: "Voland framebuffer blit", code: SHADER });
   const pipeline = device.createRenderPipeline({
@@ -47,10 +46,24 @@ async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout:
     fragment: { module: shader, entryPoint: "fragmentMain", targets: [{ format }] },
     primitive: { topology: "triangle-list" },
   });
-  const bindGroup = device.createBindGroup({
-    layout: pipeline.getBindGroupLayout(0),
-    entries: [{ binding: 0, resource: texture.createView() }, { binding: 1, resource: sampler }],
-  });
+  let bindGroup: GPUBindGroup;
+  const ensureTexture = (width: number, height: number) => {
+    if (textureWidth === width && textureHeight === height) return;
+    if (texture) texture.destroy();
+    textureWidth = width;
+    textureHeight = height;
+    texture = device.createTexture({
+      label: "Voland guest framebuffer",
+      size: { width, height },
+      format: "rgba8unorm",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    bindGroup = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: texture.createView() }, { binding: 1, resource: sampler }],
+    });
+  };
+  ensureTexture(WIDTH, HEIGHT);
   const base = layout.framebufferSlotBase;
   const counters = new Uint32Array(memory.buffer, base, 2);
   let presented = 0;
@@ -72,6 +85,7 @@ async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout:
       const pixelFormat = metadata.getUint32(8, true), byteLength = metadata.getUint32(12, true);
       if (width > 0 && width <= MAX_WIDTH && height > 0 && height <= MAX_HEIGHT &&
           pixelFormat === 1 && byteLength === width * height * 4 && byteLength <= SLOT_BYTES) {
+        ensureTexture(width, height);
         const offset = base + HEADER_BYTES + slot * SLOT_BYTES;
         const pixels = new Uint8Array(memory.buffer, offset, byteLength);
         device.queue.writeTexture({ texture }, pixels,
