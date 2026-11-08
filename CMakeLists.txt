@@ -80,7 +80,6 @@ if(EMSCRIPTEN)
   # v3.29 (§4); memory64 returns only with Switch 2 (§24 absent-flags table).
   set(VOLAND_WASM_CODEGEN_FLAGS
     -msimd128                 # REQUIRED: NEON -> WASM SIMD; ~4x slowdown without
-    -sMEMORY64=0              # Explicitly keep wasm32 pointers; the host supplies wasm32 memory
     -pthread                   # implies SHARED_MEMORY (shared-memory atomics)
     -sSHARED_MEMORY=1          # redundant under -pthread; kept for explicitness
   )
