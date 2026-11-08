@@ -185,6 +185,34 @@ static bool execute_one(InterpreterState *s) {
     (void)b; return true;
   }
 
+  /* Logical shifted-register: AND/ORR/EOR/ANDS and inverted forms. */
+  if ((insn & 0x1f000000u)==0x0a000000u) {
+    const bool is64=(insn>>31)!=0;
+    const unsigned opc=(insn>>29)&3u, shift=(insn>>22)&3u;
+    const bool invert=((insn>>21)&1u)!=0;
+    const unsigned rm=(insn>>16)&31u, amount=(insn>>10)&63u;
+    const unsigned rn=(insn>>5)&31u, rd=insn&31u;
+    const unsigned width=is64?64u:32u;
+    if (shift==3u || (!is64 && amount>=32u)) goto undefined;
+    uint64_t right=read_reg(s,rm,is64,false);
+    if (invert) right=~right;
+    if (shift==0u) right <<= amount;
+    else if (shift==1u) right >>= amount;
+    else if (amount!=0u) {
+      if (is64) right=(uint64_t)((int64_t)right >> amount);
+      else right=(uint32_t)((int32_t)right >> amount);
+    }
+    const uint64_t left=read_reg(s,rn,is64,false);
+    uint64_t result;
+    if (opc==0u || opc==3u) result=left & right;
+    else if (opc==1u) result=left | right;
+    else result=left ^ right;
+    write_reg(s,rd,result,is64,false);
+    if (opc==3u) set_nz(s,result,is64);
+    (void)width;
+    return true;
+  }
+
   /* LDR/STR unsigned immediate. */
   if ((insn & 0x3b000000u)==0x39000000u && ((insn>>22)&3u)<=1u)
     return load_store(s,insn);

@@ -77,6 +77,27 @@ int main(void) {
   CHECK(backend->get_pc(state) == CODE_GVA + 20);
   CHECK(backend->get_cycles_consumed(state) == 1);
 
+  /* Logical shifted-register and arithmetic shift coverage. */
+  const uint32_t logic_program[] = {
+    UINT32_C(0xaa020020), /* ORR X0, X1, X2 */
+    UINT32_C(0xca020023), /* EOR X3, X1, X2 */
+    UINT32_C(0xea020024), /* ANDS X4, X1, X2 */
+    UINT32_C(0xaa020425), /* ORR X5, X1, X2, LSL #1 */
+    UINT32_C(0xaa420826), /* ORR X6, X1, X2, LSR #2 */
+    UINT32_C(0xaa820c27), /* ORR X7, X1, X2, ASR #3 */
+  };
+  CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0x40, logic_program, sizeof(logic_program)));
+  backend->set_reg(state, 1, UINT64_C(0x800000000000000f));
+  backend->set_reg(state, 2, UINT64_C(0x0000000000000003));
+  backend->set_pc(state, CODE_GVA + 0x40);
+  CHECK(backend->run(state, 6) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(backend->get_reg(state, 0) == UINT64_C(0x800000000000000f));
+  CHECK(backend->get_reg(state, 3) == UINT64_C(0x800000000000000c));
+  CHECK(backend->get_reg(state, 4) == UINT64_C(0x3));
+  CHECK(backend->get_reg(state, 5) == UINT64_C(0x800000000000000f));
+  CHECK(backend->get_reg(state, 6) == UINT64_C(0x800000000000000f));
+  CHECK(backend->get_reg(state, 7) == UINT64_C(0x800000000000000f));
+
   /* Unsupported encodings must report the exact instruction and fault
    * instead of silently advancing the guest PC. */
   const uint32_t invalid = UINT32_C(0xffffffff);
