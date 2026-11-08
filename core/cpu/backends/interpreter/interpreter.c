@@ -183,6 +183,20 @@ static bool execute_one(InterpreterState *s) {
     write_reg(s,rd,value,is64,false); return true;
   }
 
+  /* MADD / MSUB: multiply two registers and add/subtract an accumulator. */
+  if ((insn & 0x1fe00000u)==0x1b000000u) {
+    const bool is64=(insn>>31)!=0, subtract=((insn>>15)&1u)!=0;
+    const unsigned rm=(insn>>16)&31u, ra=(insn>>10)&31u;
+    const unsigned rn=(insn>>5)&31u, rd=insn&31u;
+    const uint64_t left=read_reg(s,rn,is64,false);
+    const uint64_t right=read_reg(s,rm,is64,false);
+    const uint64_t accumulator=read_reg(s,ra,is64,false);
+    const uint64_t product=left*right;
+    const uint64_t result=subtract?accumulator-product:accumulator+product;
+    write_reg(s,rd,result,is64,false);
+    return true;
+  }
+
   /* ADD / SUB (immediate), including flag-setting CMP alias. */
   if ((insn & 0x1f000000u)==0x11000000u) {
     const bool is64=(insn>>31)!=0, sub=((insn>>30)&1u)!=0, set=((insn>>29)&1u)!=0;
