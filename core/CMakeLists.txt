@@ -17,6 +17,7 @@ set(SWITCH_CORE_SOURCES
   hle/kernel/svc_ipc.c
   hle/kernel/tls.c
   hle/kernel/thread.c
+  hle/kernel/scheduler.c
   hle/services/sm/sm.c
   hle/loader/byte_source.c
   hle/loader/nca_parse.c
@@ -64,6 +65,7 @@ set(SWITCH_CORE_PUBLIC_HEADERS
   hle/kernel/svc_ipc.h
   hle/kernel/tls.h
   hle/kernel/thread.h
+  hle/kernel/scheduler.h
   hle/services/sm/sm.h
   hle/loader/byte_source.h
   hle/loader/nca_parse.h

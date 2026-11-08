@@ -64,6 +64,10 @@ add_executable(thread_test thread_test.c)
 target_link_libraries(thread_test PRIVATE switch_core)
 add_test(NAME thread_test COMMAND thread_test)
 
+add_executable(scheduler_test scheduler_test.c)
+target_link_libraries(scheduler_test PRIVATE switch_core)
+add_test(NAME scheduler_test COMMAND scheduler_test)
+
 #
 # core/hle/kernel/svc_memory (§25 checkbox 5): SVC-path tests over a real
 # process_bootstrap()'d Process, driven through hle_on_svc the way
