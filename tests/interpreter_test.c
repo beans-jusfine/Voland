@@ -132,6 +132,22 @@ int main(void) {
   CHECK(backend->get_reg(state, 4) == UINT64_C(0xfffffffd00000004));
   CHECK(backend->get_reg(state, 5) == 16);
 
+  /* UBFM extracts unsigned fields; SBFM sign-extends the selected field. */
+  const uint32_t bitfield_program[] = {
+    UINT32_C(0xd348fc20), /* UBFM X0, X1, #8, #63 (LSR #8) */
+    UINT32_C(0x93401c62), /* SBFM X2, X3, #0, #7 (sign-extend byte) */
+    UINT32_C(0x53001ca4), /* UBFM W4, W5, #0, #7 */
+  };
+  CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0xb0, bitfield_program, sizeof(bitfield_program)));
+  backend->set_reg(state, 1, UINT64_C(0x123456789abcdef0));
+  backend->set_reg(state, 3, UINT64_C(0xf0));
+  backend->set_reg(state, 5, UINT64_C(0x1234));
+  backend->set_pc(state, CODE_GVA + 0xb0);
+  CHECK(backend->run(state, 3) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(backend->get_reg(state, 0) == UINT64_C(0x00123456789abcde));
+  CHECK(backend->get_reg(state, 2) == UINT64_C(0xfffffffffffffff0));
+  CHECK(backend->get_reg(state, 4) == UINT64_C(0x34));
+
   /* A subtraction underflow sets N and clears C. */
   const uint32_t underflow_program[] = { UINT32_C(0xeb02002b) };
   CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0xc0, underflow_program, sizeof(underflow_program)));
