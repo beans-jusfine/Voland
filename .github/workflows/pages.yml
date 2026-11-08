@@ -32,7 +32,7 @@ jobs:
         with:
           version: ${{ env.EMSDK_VERSION }}
       - name: Configure WebAssembly core
-        run: cmake --preset web -DVOLAND_WEB_MEMORY_PAGES=24576 -DVOLAND_WEB_GUEST_RAM_MIB=512
+        run: cmake --preset web -DVOLAND_WEB_MEMORY_PAGES=32768 -DVOLAND_WEB_GUEST_RAM_MIB=1024
       - name: Build WebAssembly core
         run: cmake --build --preset web
       - name: Upload WebAssembly core
@@ -70,7 +70,7 @@ jobs:
           path: platform/web/public/core
       - name: Build web frontend
         env:
-          VOLAND_WEB_MEMORY_PAGES: 24576
+          VOLAND_WEB_MEMORY_PAGES: 32768
         working-directory: platform/web
         run: pnpm run build
       - name: Pull Vercel project settings
@@ -86,7 +86,7 @@ jobs:
       - name: Build Vercel production output
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VOLAND_WEB_MEMORY_PAGES: 24576
+          VOLAND_WEB_MEMORY_PAGES: 32768
         run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
       - name: Deploy to Vercel
         env:
