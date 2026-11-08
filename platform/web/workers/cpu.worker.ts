@@ -45,8 +45,24 @@ let paused = false;
 let halted = false;
 let tickScheduled = false;
 let demoExecutionCheckPending = false;
+let lastMemoryStatsAt = 0;
 const SCHEDULER_CYCLE_BUDGET = 32_000n;
 const WORKER_TICK_INTERVAL_MS = 16;
+
+function publishMemoryStats(force = false): void {
+  if (!core || !wasmMemory) return;
+  const now = Date.now();
+  if (!force && now - lastMemoryStatsAt < 1000) return;
+  lastMemoryStatsAt = now;
+  const message: CPUToMainMessage = {
+    type: "memory-stats",
+    totalBytes: Number(core._emulator_guest_ram_total_ffi()),
+    allocatedBytes: Number(core._emulator_guest_ram_allocated_ffi()),
+    freeBytes: Number(core._emulator_guest_ram_free_ffi()),
+    peakBytes: Number(core._emulator_guest_ram_peak_ffi()),
+  };
+  self.postMessage(message);
+}
 
 function scheduleExecutionTick(): void {
   if (tickScheduled || halted || !core) return;
@@ -68,6 +84,7 @@ function scheduleExecutionTick(): void {
         }
       }
     }
+    publishMemoryStats();
     scheduleExecutionTick();
   }, WORKER_TICK_INTERVAL_MS);
 }
@@ -111,6 +128,7 @@ async function init(memory: WebAssembly.Memory): Promise<void> {
     backendVersion: backendId === 1 ? "0.1.0-dev" : "1.0.0",
   };
   self.postMessage(ready);
+  publishMemoryStats(true);
   scheduleExecutionTick();
 }
 
