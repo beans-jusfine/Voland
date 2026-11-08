@@ -76,10 +76,15 @@ int main(void)
   CHECK(regs->pc == 0x1000);
   CHECK(regs->x[0] == 0xdeadbeefcafebabeULL);
 
-  /* Bounded run: the no-op backend must honor the exit-reason contract
-   * (§9) rather than running to completion. */
-  const CPU_ExitReason reason = emulator_run(&emu, 5000);
+  /* Backend contract: the no-op backend must honor a bounded direct run.
+   * The emulator scheduler only dispatches guest threads after a program
+   * has been loaded, so this pre-load smoke test exercises the backend API. */
+  const CPU_ExitReason reason = cpu->run(emu.cpu_state, 5000);
   CHECK(reason == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(cpu->get_cycles_consumed(emu.cpu_state) == 5000);
+
+  /* With no guest program loaded, the emulator scheduler has nothing to run. */
+  CHECK(emulator_run(&emu, 5000) == CPU_EXIT_CYCLES_ELAPSED);
   CHECK(cpu->get_cycles_consumed(emu.cpu_state) == 5000);
 
   /* Simulate the backend calling the SVC handler on a CPU_EXIT_SVC: `swi`
