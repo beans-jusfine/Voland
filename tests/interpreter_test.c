@@ -129,7 +129,7 @@ int main(void) {
   backend->set_pc(state, CODE_GVA + 0xa0);
   CHECK(backend->run(state, 3) == CPU_EXIT_CYCLES_ELAPSED);
   CHECK(backend->get_reg(state, 0) == UINT64_C(0x300000010));
-  CHECK(backend->get_reg(state, 4) == UINT64_C(0xffffffffffd0000a));
+  CHECK(backend->get_reg(state, 4) == UINT64_C(0xfffffffd00000004));
   CHECK(backend->get_reg(state, 5) == 16);
 
   /* A subtraction underflow sets N and clears C. */
