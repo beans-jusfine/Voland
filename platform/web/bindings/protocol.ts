@@ -23,6 +23,7 @@ export type CPUToMainMessage =
   | { readonly type: "ready"; readonly backendName: string; readonly backendVersion: string }
   | { readonly type: "log"; readonly level: LogLevel; readonly message: string }
   | { readonly type: "halted" }
+  | { readonly type: "memory-stats"; readonly totalBytes: number; readonly allocatedBytes: number; readonly freeBytes: number; readonly peakBytes: number }
   | { readonly type: "error"; readonly message: string };
 
 export type MainToGPUMessage =
