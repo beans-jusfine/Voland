@@ -39,6 +39,7 @@ int main(void) {
 
   CHECK_OK(page_allocator_init_guest_ram(&pages));
   CHECK(pages.base_pa == 0 && pages.size_bytes == ram && pages.used_bytes == 0);
+  CHECK(pages.allocated_bytes == 0 && pages.peak_allocated_bytes == 0);
   CHECK(page_allocator_free_bytes(&pages) == ram);
 
   /* Init validation. */
@@ -56,9 +57,11 @@ int main(void) {
   uint64_t pa = 0;
   CHECK_OK(page_allocator_allocate(&pages, 1, &pa));
   CHECK(pa == 0x100000);
+  CHECK(pages.allocated_bytes == VMM_PAGE_SIZE && pages.peak_allocated_bytes == VMM_PAGE_SIZE);
   check_committed(pa, 1);
   CHECK_OK(page_allocator_allocate(&pages, 2, &pa));
   CHECK(pa == 0x100000 + VMM_PAGE_SIZE);
+  CHECK(pages.allocated_bytes == 3 * VMM_PAGE_SIZE && pages.peak_allocated_bytes == 3 * VMM_PAGE_SIZE);
   check_committed(pa, 2);
   CHECK(page_allocator_free_bytes(&pages) == VMM_PAGE_SIZE);
 
@@ -69,6 +72,7 @@ int main(void) {
   CHECK_CODE(page_allocator_allocate(&pages, UINT64_MAX, &pa), RESULT_OUT_OF_MEMORY);
   CHECK_OK(page_allocator_allocate(&pages, 1, &pa));
   CHECK(pa == 0x100000 + 3 * VMM_PAGE_SIZE);
+  CHECK(pages.allocated_bytes == 4 * VMM_PAGE_SIZE && pages.peak_allocated_bytes == 4 * VMM_PAGE_SIZE);
   CHECK(page_allocator_free_bytes(&pages) == 0);
 
   CHECK_CODE(page_allocator_allocate(&pages, 0, &pa), RESULT_INVALID_ARGUMENT);
@@ -76,7 +80,7 @@ int main(void) {
   CHECK_CODE(page_allocator_allocate(NULL, 1, &pa), RESULT_INVALID_ARGUMENT);
 
   page_allocator_reset(&pages);
-  CHECK(pages.used_bytes == 0);
+  CHECK(pages.used_bytes == 0 && pages.allocated_bytes == 0 && pages.peak_allocated_bytes == 0);
   CHECK_OK(page_allocator_allocate(&pages, 4, &pa));
   CHECK(pa == 0x100000);
 
@@ -86,6 +90,7 @@ int main(void) {
   /* The last page is adjacent to the cursor: retracts it directly, no
    * freelist entry needed. */
   CHECK_OK(page_allocator_free(&pages, pa + 3 * VMM_PAGE_SIZE, 1));
+  CHECK(pages.allocated_bytes == 3 * VMM_PAGE_SIZE && pages.peak_allocated_bytes == 4 * VMM_PAGE_SIZE);
   CHECK(pages.used_bytes == 3 * VMM_PAGE_SIZE);
   CHECK(pages.free_run_count == 0);
 
@@ -139,6 +144,7 @@ int main(void) {
     CHECK_OK(page_allocator_free(&spread, spread_pa + (uint64_t)(2 * i) * VMM_PAGE_SIZE, 1));
   }
   CHECK(spread.free_run_count == PAGE_ALLOCATOR_MAX_FREE_RUNS);
+  CHECK(spread.allocated_bytes == (34 - PAGE_ALLOCATOR_MAX_FREE_RUNS) * VMM_PAGE_SIZE);
   CHECK_CODE(
       page_allocator_free(&spread, spread_pa + (uint64_t)(2 * PAGE_ALLOCATOR_MAX_FREE_RUNS) * VMM_PAGE_SIZE, 1),
       RESULT_OUT_OF_MEMORY);
