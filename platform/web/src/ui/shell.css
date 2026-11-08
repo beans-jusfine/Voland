@@ -1,131 +1,18 @@
 /**
- * Dedicated Voland emulator display with separate loader and event log.
+ * Voland HOME-style web console and emulator workspace.
  */
-.voland-shell {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: #080910;
-  color: #e6e6ea;
-  font-family: ui-sans-serif, system-ui, sans-serif;
-}
-.voland-header {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 16px 24px;
-  border-bottom: 1px solid #202130;
-  background: #0c0d17;
-}
-.voland-brand { display: flex; align-items: baseline; gap: 12px; }
-.voland-title { font-size: 22px; font-weight: 700; letter-spacing: .02em; }
-.voland-subtitle { font-size: 11px; color: #777b91; text-transform: uppercase; letter-spacing: .13em; }
-.voland-status { color: #9298b0; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
-.voland-main {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 370px);
-  gap: 22px;
-  padding: 24px;
-}
-.voland-display-column { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-.voland-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.voland-section-heading h1 { margin: 0; font-size: 19px; font-weight: 600; }
-.voland-section-heading p { margin: 5px 0 0; color: #85899e; font-size: 12px; line-height: 1.5; }
-.voland-display-controls { display: flex; align-items: center; gap: 9px; }
-.voland-fps-toggle {
-  border: 1px solid #343b61; border-radius: 7px; padding: 6px 9px;
-  background: #111426; color: #aeb8e8; cursor: pointer;
-  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em;
-}
-.voland-fps-toggle.is-active { border-color: #477b68; background: #10251e; color: #8de0b7; }
-.voland-display-state, .voland-panel-heading span {
-  color: #8e9eff; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: .12em; border: 1px solid #343b61; border-radius: 20px; padding: 5px 9px;
-}
-.voland-display-frame {
-  flex: 1;
-  min-height: 220px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px;
-  border: 1px solid #292c3d;
-  border-radius: 13px;
-  background: #03040a;
-  box-shadow: 0 12px 40px rgba(0,0,0,.28);
-}
-.voland-screen {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  max-height: 100%;
-  overflow: hidden;
-  background: #05060b;
-  border: 1px solid #1d2030;
-  border-radius: 5px;
-}
-#game {
-  position: absolute !important;
-  inset: 0 !important;
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
-  z-index: 1 !important;
-  object-fit: contain;
-}
-.voland-fps-counter {
-  position: absolute; z-index: 2; top: 10px; right: 10px;
-  padding: 6px 9px; border: 1px solid rgba(130, 220, 175, .4); border-radius: 6px;
-  background: rgba(5, 12, 10, .82); color: #9be7bf;
-  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em;
-  pointer-events: none;
-}
-.voland-fps-counter strong { margin-left: 5px; color: #d6ffe6; font-size: 13px; }
-.voland-screen-placeholder {
-  position: absolute; inset: 0; display: grid; place-items: center;
-  color: #5f6479; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.voland-display-caption { display: flex; justify-content: space-between; color: #666b80; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; }
-.voland-facts { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin: 4px 0 0; }
-.voland-facts > div { min-width: 0; border: 1px solid #222536; border-radius: 9px; padding: 11px 12px; background: #0d0f1a; }
-.voland-facts dt { color: #747990; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px; }
-.voland-facts dd { margin: 0; color: #d7daea; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
-.voland-sidebar { min-height: 0; display: flex; flex-direction: column; gap: 14px; }
-.voland-panel { min-width: 0; border: 1px solid #25283a; border-radius: 12px; background: #0d0f1a; overflow: hidden; }
-.voland-loader { flex: 0 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 11px; }
-.voland-panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.voland-panel-heading h2 { margin: 0; font-size: 14px; font-weight: 600; }
-.voland-panel-heading span { font-size: 9px; padding: 4px 7px; }
-.voland-file-label { color: #c8d0f3; font-size: 12px; font-weight: 600; }
-.voland-file-input { width: 100%; color: #a8a8b5; font: 12px ui-monospace, monospace; }
-.voland-file-name { overflow: hidden; text-overflow: ellipsis; color: #9da2b8; font: 11px ui-monospace, monospace; }
-.voland-load-button { border: 1px solid #5555a0; border-radius: 8px; padding: 10px 14px; background: #29294a; color: #fff; cursor: pointer; font-weight: 600; }
-.voland-load-button:disabled { opacity: .4; cursor: not-allowed; }
-.voland-sample-link { color: #aabaff; font-size: 11px; text-decoration: none; }
-.voland-sample-link:hover { text-decoration: underline; }
-.voland-loader-note { margin: 0; color: #777d93; font-size: 10px; line-height: 1.5; }
-.voland-log { flex: 1; min-height: 120px; display: flex; flex-direction: column; }
-.voland-log > .voland-panel-heading { padding: 13px 15px; border-bottom: 1px solid #222536; }
-.voland-log-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 11px 14px; font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
-.voland-log-scroll .log-line { margin: 0 0 4px; }
-.voland-log-scroll .log-info { color: #c8d5ff; }
-.voland-log-scroll .log-warn { color: #f3c27d; }
-.voland-log-scroll .log-error { color: #ff8b8b; }
-.voland-log-scroll .log-debug { color: #8d8d99; }
-.voland-log-scroll .log-trace { color: #5a5a66; }
-@media (max-width: 900px) {
-  .voland-main { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(300px,1fr) auto; overflow: auto; padding: 16px; }
-  .voland-sidebar { min-height: 420px; }
-  .voland-log { min-height: 220px; }
-}
-@media (max-width: 520px) {
-  .voland-header { align-items: flex-start; flex-direction: column; padding: 13px 16px; gap: 7px; }
-  .voland-main { padding: 12px; gap: 14px; }
-  .voland-facts { grid-template-columns: 1fr; }
-  .voland-section-heading h1 { font-size: 17px; }
-}
+.voland-shell{position:fixed;inset:0;display:flex;flex-direction:column;overflow:auto;background:#090b12;color:#eef0f8;font-family:ui-sans-serif,system-ui,sans-serif}
+.voland-header{z-index:5;flex:0 0 auto;min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:24px;padding:0 34px;border-bottom:1px solid #25283a;background:rgba(12,14,23,.96)}
+.voland-brand{display:flex;align-items:center;gap:11px;border:0;background:none;color:inherit;text-align:left;cursor:pointer;padding:0}
+.voland-mark{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;background:linear-gradient(145deg,#7d86ff,#4d50b9);font-size:21px;font-weight:900;color:white;box-shadow:0 5px 18px #5555b544}
+.voland-brand-copy{display:flex;flex-direction:column;gap:2px}.voland-title{font-size:16px;font-weight:850;letter-spacing:.16em}.voland-subtitle{font-size:8px;color:#777e98;letter-spacing:.2em}
+.voland-nav{height:72px;display:flex;align-items:stretch;gap:28px}.voland-nav button{position:relative;border:0;background:none;color:#81879d;font-size:10px;font-weight:750;letter-spacing:.13em;cursor:pointer}.voland-nav button:hover,.voland-nav button.is-current{color:#fff}.voland-nav button.is-current:after{content:"";position:absolute;bottom:0;left:0;right:0;height:2px;background:#858bff;box-shadow:0 0 12px #777cff}
+.voland-header-right{display:flex;align-items:center;gap:9px;color:#8d94aa;font:10px ui-monospace,monospace}.voland-online-dot{width:7px;height:7px;border-radius:50%;background:#5bdaa1;box-shadow:0 0 10px #5bdaa188}
+.voland-home,.voland-page{width:min(1160px,100%);margin:0 auto;padding:36px 34px 24px;box-sizing:border-box}.voland-welcome{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:28px}.voland-eyebrow{margin:0 0 9px;color:#8d91ff;font-size:9px;font-weight:800;letter-spacing:.2em}.voland-welcome h1,.voland-page-heading h1{margin:0;font-size:clamp(27px,4vw,39px);font-weight:750;letter-spacing:-.04em}.voland-welcome h1 span{color:#9296ff}.voland-welcome-copy,.voland-page-heading p:not(.voland-eyebrow){margin:8px 0 0;color:#8c91a7;font-size:12px}.voland-clock-card{min-width:150px;padding:13px 16px;border:1px solid #292d43;border-radius:11px;background:#111522;display:flex;flex-direction:column;gap:4px}.voland-clock-card span,.voland-setting-card>span{font-size:8px;color:#747c99;letter-spacing:.16em;font-weight:800}.voland-clock-card strong{font-size:14px;color:#72e1ad;letter-spacing:.08em}.voland-clock-card small{color:#7e849b;font:9px ui-monospace,monospace}
+.voland-feature{display:grid;grid-template-columns:1.05fr 1fr;min-height:260px;overflow:hidden;border:1px solid #30334e;border-radius:16px;background:linear-gradient(110deg,#171a32,#111421 65%);box-shadow:0 18px 50px #0003}.voland-feature-art{position:relative;min-height:260px;display:grid;place-items:center;overflow:hidden;background:radial-gradient(ellipse at 50% 52%,#4d4fae66 0%,#272a5944 35%,transparent 70%),linear-gradient(135deg,#171a36,#101321)}.voland-feature-orbit{position:absolute;width:220px;height:220px;border:1px solid #888cff55;border-radius:50%;transform:rotate(-25deg) scaleY(.45)}.orbit-two{width:290px;height:290px;transform:rotate(35deg) scaleY(.45);border-color:#64d9e655}.voland-feature-cube{width:104px;height:104px;display:grid;place-items:center;border:1px solid #b7bcff99;border-radius:25px;background:linear-gradient(145deg,#777cff,#383b8b);box-shadow:0 20px 65px #656bff66,inset 0 1px #ffffff88;font-size:66px;font-weight:900;color:#fff;transform:rotate(-9deg)}.voland-feature-label{position:absolute;bottom:16px;left:20px;color:#858aa9;font:9px ui-monospace,monospace;letter-spacing:.18em}.voland-feature-copy{align-self:center;padding:30px 38px}.voland-feature-copy h2{margin:0;font-size:28px;letter-spacing:-.04em}.voland-feature-copy>p:not(.voland-eyebrow){max-width:390px;color:#9298ad;font-size:12px;line-height:1.7}.voland-feature-meta{display:flex;gap:17px;margin:18px 0;color:#8e94b1;font:9px ui-monospace,monospace;letter-spacing:.08em}.voland-primary-button,.voland-secondary-button{border:1px solid #777cff;border-radius:7px;padding:11px 17px;background:linear-gradient(135deg,#686df0,#4c50b8);color:white;font-size:10px;font-weight:800;letter-spacing:.1em;cursor:pointer;box-shadow:0 7px 20px #5659cb33}.voland-primary-button:hover{filter:brightness(1.13);transform:translateY(-1px)}button:disabled{opacity:.55;cursor:wait;transform:none}
+.voland-section{margin-top:34px}.voland-section-title{display:flex;align-items:end;justify-content:space-between;margin-bottom:15px}.voland-section-title h2{margin:0;font-size:17px}.voland-text-button{border:0;background:none;color:#a7aaff;font-size:9px;font-weight:800;letter-spacing:.1em;cursor:pointer}.voland-text-button span{padding-left:5px}.voland-game-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.voland-game-card{display:flex;align-items:center;gap:13px;min-width:0;padding:10px;border:1px solid #282c40;border-radius:11px;background:#111521;color:inherit;text-align:left;cursor:pointer}.voland-game-card:hover,.voland-library-card:hover{border-color:#6469ba;background:#171b2d}.voland-game-art{width:58px;height:58px;flex:0 0 58px;display:grid;place-items:center;border-radius:8px;font-size:29px;color:#fff}.art-calibration{background:radial-gradient(circle at 35% 35%,#ff85c7 0 12%,transparent 13%),radial-gradient(circle at 70% 70%,#59dff1 0 14%,transparent 15%),#24284e}.art-particles{background:radial-gradient(circle,#d3c5ff 1px,transparent 2px) 0 0/12px 12px,#2b2354}.art-diagnostic{background:linear-gradient(135deg,#d44aab 0 33%,#43c8e1 33% 66%,#e7ca54 66%)}.art-bounce{background:linear-gradient(135deg,#183e62,#20275c)}.voland-game-info{display:flex;flex-direction:column;gap:5px;min-width:0}.voland-game-info strong{font-size:11px}.voland-game-info small{color:#8289a1;font-size:9px;white-space:normal}.voland-home-footer{display:flex;justify-content:space-between;margin-top:34px;padding-top:14px;border-top:1px solid #202437;color:#565d75;font:8px ui-monospace,monospace;letter-spacing:.13em}
+.voland-page{padding-top:42px}.voland-page-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:26px}.voland-library-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.voland-library-card{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid #292d42;border-radius:12px;background:#111521;color:#f2f3fa;text-align:left;cursor:pointer}.voland-library-art{height:130px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-radius:8px;font-size:54px;color:white}.voland-library-art small{font:8px ui-monospace,monospace;letter-spacing:.14em}.voland-library-card>strong{font-size:12px}.voland-library-card>span:last-child{color:#858ca4;font-size:9px}.voland-empty-library{display:flex;align-items:center;gap:14px;margin-top:25px;padding:18px;border:1px dashed #353a53;border-radius:12px}.voland-empty-library>span{font-size:26px;color:#9b9eff}.voland-empty-library div{flex:1}.voland-empty-library strong{font-size:11px}.voland-empty-library p{margin:4px 0 0;color:#81889f;font-size:10px}.voland-secondary-button{background:#171b2d;border-color:#3d4262;box-shadow:none}
+.voland-emulator-page{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,350px);gap:20px;padding:22px 28px}.voland-display-column{min-width:0;display:flex;flex-direction:column;gap:12px}.voland-section-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.voland-section-heading h1{margin:0;font-size:19px;font-weight:650}.voland-section-heading p:not(.voland-eyebrow){margin:5px 0 0;color:#85899e;font-size:12px}.voland-display-controls{display:flex;align-items:center;gap:9px}.voland-fps-toggle{border:1px solid #343b61;border-radius:7px;padding:6px 9px;background:#111426;color:#aeb8e8;cursor:pointer;font:10px ui-monospace,monospace}.voland-fps-toggle.is-active{border-color:#477b68;background:#10251e;color:#8de0b7}.voland-display-state,.voland-panel-heading span{color:#8e9eff;font:10px ui-monospace,monospace;letter-spacing:.12em;border:1px solid #343b61;border-radius:20px;padding:5px 9px}.voland-display-frame{flex:1;min-height:220px;display:flex;align-items:center;justify-content:center;padding:10px;border:1px solid #292c3d;border-radius:13px;background:#03040a}.voland-screen{position:relative;width:100%;aspect-ratio:16/9;max-height:100%;overflow:hidden;background:#05060b;border:1px solid #1d2030;border-radius:5px}#game{position:absolute!important;inset:0!important;display:block;width:100%!important;height:100%!important;z-index:1!important;object-fit:contain}.voland-fps-counter{position:absolute;z-index:2;top:10px;right:10px;padding:6px 9px;border:1px solid #82dcaf66;border-radius:6px;background:#050c0acc;color:#9be7bf;font:11px ui-monospace,monospace;pointer-events:none}.voland-fps-counter strong{margin-left:5px;color:#d6ffe6;font-size:13px}.voland-screen-placeholder{position:absolute;inset:0;display:grid;place-items:center;color:#5f6479;font:12px ui-monospace,monospace}.voland-display-caption{display:flex;justify-content:space-between;color:#666b80;font:10px ui-monospace,monospace;letter-spacing:.1em}.voland-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.voland-facts>div{min-width:0;border:1px solid #222536;border-radius:9px;padding:11px;background:#0d0f1a}.voland-facts dt{color:#747990;font-size:10px;text-transform:uppercase;margin-bottom:6px}.voland-facts dd{margin:0;color:#d7daea;font:12px ui-monospace,monospace;overflow-wrap:anywhere}.voland-sidebar{min-height:0;display:flex;flex-direction:column;gap:14px}.voland-panel{min-width:0;border:1px solid #25283a;border-radius:12px;background:#0d0f1a;overflow:hidden}.voland-loader{flex:0 0 auto;padding:16px;display:flex;flex-direction:column;gap:11px}.voland-panel-heading{display:flex;justify-content:space-between;align-items:center;gap:10px}.voland-panel-heading h2{margin:0;font-size:14px}.voland-panel-heading span{font-size:9px;padding:4px 7px}.voland-file-label{color:#c8d0f3;font-size:12px;font-weight:600}.voland-file-input{width:100%;color:#a8a8b5;font:12px ui-monospace,monospace}.voland-file-name{overflow:hidden;text-overflow:ellipsis;color:#9da2b8;font:11px ui-monospace,monospace}.voland-load-button{border:1px solid #5555a0;border-radius:8px;padding:10px;background:#29294a;color:#fff;cursor:pointer;font-weight:600}.voland-load-button:disabled{opacity:.4;cursor:not-allowed}.voland-sample-link{color:#aabaff;font-size:10px;text-decoration:none}.voland-sample-link:hover{text-decoration:underline}.voland-loader-note{margin:0;color:#777d93;font-size:10px;line-height:1.5}.voland-log{flex:1;min-height:120px;display:flex;flex-direction:column}.voland-log>.voland-panel-heading{padding:13px 15px;border-bottom:1px solid #222536}.voland-log-scroll{flex:1;min-height:0;max-height:300px;overflow-y:auto;padding:11px 14px;font:11px/1.55 ui-monospace,monospace;white-space:pre-wrap;word-break:break-word}.voland-log-scroll .log-line{margin:0 0 4px}.log-info{color:#c8d5ff}.log-warn{color:#f3c27d}.log-error{color:#ff8b8b}.log-debug{color:#8d8d99}.log-trace{color:#5a5a66}
+.voland-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.voland-setting-card{display:flex;flex-direction:column;gap:9px;padding:20px;border:1px solid #292d42;border-radius:12px;background:#111521}.voland-setting-card strong{font-size:15px;overflow-wrap:anywhere}.voland-setting-card small,.voland-settings-note{color:#838aa2;font-size:10px}.voland-settings-note{margin-top:22px}
+@media(max-width:900px){.voland-header{padding:0 18px}.voland-emulator-page{grid-template-columns:minmax(0,1fr);overflow:auto}.voland-sidebar{min-height:420px}.voland-log{min-height:220px}.voland-library-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.voland-header{min-height:unset;flex-wrap:wrap;gap:8px;padding:12px 15px}.voland-nav{order:3;width:100%;height:42px;justify-content:space-between;gap:8px}.voland-nav button{font-size:9px}.voland-header-right{font-size:9px}.voland-home,.voland-page{padding:24px 16px}.voland-welcome{align-items:flex-start}.voland-clock-card{min-width:110px}.voland-feature{grid-template-columns:1fr}.voland-feature-art{min-height:180px}.voland-feature-copy{padding:23px}.voland-game-grid{grid-template-columns:1fr}.voland-page-heading{align-items:flex-start;flex-direction:column}.voland-library-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.voland-library-art{height:100px}.voland-empty-library{align-items:flex-start;flex-wrap:wrap}.voland-emulator-page{padding:15px}.voland-facts{grid-template-columns:1fr}.voland-settings-grid{grid-template-columns:1fr}}
