@@ -10,7 +10,7 @@ DATA_SIZE = W * H * 4
 SQUARE = 5
 # Move right, then left again. One complete frame is one 10,000-cycle
 # scheduler slice (about 16 ms at Voland's current web tick interval).
-POSITIONS = list(range(2, W - SQUARE)) + list(range(W - SQUARE - 2, 2, -1))
+POSITIONS = [2, 7, 12, 17, 22, 27, 22, 17, 12, 7]
 FRAME_COUNT = len(POSITIONS)
 
 
