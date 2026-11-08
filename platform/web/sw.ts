@@ -5,27 +5,18 @@
  *    should set these at the server/hosting-config level; the SW path is
  *    the fallback for self-hosters who can't - and requires one reload on
  *    first visit before it can control the page (handled in main.ts).
- * 2. Cache strategy: app shell cache-first (navigations always resolve to
- *    the cached shell, so client-side routing survives a hard refresh at
- *    e.g. /game/:titleId), `.wasm` aggressively cache-first, `/api/`
- *    network-only, everything else network-first.
- *
- * Phase 0 has no build-time precache manifest (that needs a bundler
- * plugin, e.g. vite-plugin-pwa, which is not wired up yet) - caches are
- * filled lazily as requests are served rather than precached at install.
+ *  2. Cache strategy: app shell network-first with an offline fallback,
+ *     .wasm cache-first, /api/ network-only, everything else network-first.
  */
 
 const sw: ServiceWorkerGlobalScope = globalThis as unknown as ServiceWorkerGlobalScope;
 
 const SHELL_CACHE = "voland-shell-v2";
 const WASM_CACHE = "voland-wasm-v2";
-const BASE_URL = new URL(".", sw.registration.scope); 
-const BASE_PATH = BASE_URL.pathname; 
+const BASE_URL = new URL(".", sw.registration.scope);
+const BASE_PATH = BASE_URL.pathname;
 const SHELL_URL = new URL("index.html", BASE_URL).href;
 
-/* COOP must be strict "same-origin" - "same-origin-allow-popups" never
- * yields crossOriginIsolated in shipping Chromium regardless of COEP (see
- * vite.config.ts for the full explanation and docs/DESIGN.md §16). */
 const CROSS_ORIGIN_ISOLATION_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ["Cross-Origin-Opener-Policy", "same-origin"],
   ["Cross-Origin-Embedder-Policy", "require-corp"],
@@ -44,27 +35,47 @@ function addCrossOriginIsolationHeaders(response: Response): Response {
   });
 }
 
+function offlineResponse(): Response {
+  return addCrossOriginIsolationHeaders(new Response(
+    "Voland is temporarily unavailable. Check your connection and reload.",
+    { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } },
+  ));
+}
+
 async function cacheFirst(request: Request, cacheName: string): Promise<Response> {
   const cache = await sw.caches.open(cacheName);
   const cached = await cache.match(request);
   if (cached) return addCrossOriginIsolationHeaders(cached);
 
-  const response = await fetch(request);
-  if (response.ok) await cache.put(request, response.clone());
-  return addCrossOriginIsolationHeaders(response);
-}
-
-async function networkFirst(request: Request): Promise<Response> {
-  const cache = await sw.caches.open(SHELL_CACHE);
   try {
     const response = await fetch(request);
-    if (response.ok) await cache.put(request, response.clone());
+    if (response.ok) {
+      try { await cache.put(request, response.clone()); } catch { /* cache is optional */ }
+    }
     return addCrossOriginIsolationHeaders(response);
-  } catch (e) {
-    const cached = await cache.match(request);
-    if (cached) return addCrossOriginIsolationHeaders(cached);
-    throw e;
+  } catch {
+    return offlineResponse();
   }
+}
+
+async function networkFirst(request: Request, isNavigation = false): Promise<Response> {
+  const cache = await sw.caches.open(SHELL_CACHE);
+  let response: Response;
+
+  try {
+    response = await fetch(request);
+  } catch {
+    // Navigation requests may have been cached under either the original
+    // URL or index.html, depending on which version of the worker cached it.
+    const cached = await cache.match(request) ??
+      (isNavigation ? await cache.match(SHELL_URL) : undefined);
+    return cached ? addCrossOriginIsolationHeaders(cached) : offlineResponse();
+  }
+
+  if (response.ok) {
+    try { await cache.put(request, response.clone()); } catch { /* cache is optional */ }
+  }
+  return addCrossOriginIsolationHeaders(response);
 }
 
 sw.addEventListener("install", () => {
@@ -73,8 +84,6 @@ sw.addEventListener("install", () => {
 
 sw.addEventListener("activate", (event: ExtendableEvent) => {
   event.waitUntil((async () => {
-    // Remove old app-shell/WASM caches so HTML cannot point at chunks
-    // removed by a newer Pages deployment.
     const names = await sw.caches.keys();
     await Promise.all(names
       .filter(name =>
@@ -85,8 +94,6 @@ sw.addEventListener("activate", (event: ExtendableEvent) => {
   })());
 });
 
-/* Fallback claim request from the page if the initial activation claim
- * did not attach the currently open client. */
 sw.addEventListener("message", (event: ExtendableMessageEvent) => {
   if (event.data?.type === "VOLAND_CLAIM_CLIENTS") {
     event.waitUntil(sw.clients.claim());
@@ -95,10 +102,12 @@ sw.addEventListener("message", (event: ExtendableMessageEvent) => {
 
 sw.addEventListener("fetch", (event: FetchEvent) => {
   const url = new URL(event.request.url);
-  if (url.origin !== location.origin) return; // let cross-origin requests through untouched
+  if (url.origin !== location.origin) return;
 
   if (url.pathname.startsWith(`${BASE_PATH}api/`)) {
-    event.respondWith(fetch(event.request).then(addCrossOriginIsolationHeaders));
+    event.respondWith(fetch(event.request)
+      .then(addCrossOriginIsolationHeaders)
+      .catch(() => offlineResponse()));
     return;
   }
 
@@ -108,10 +117,7 @@ sw.addEventListener("fetch", (event: FetchEvent) => {
   }
 
   if (event.request.mode === "navigate") {
-    // Refresh the app shell on every navigation. Cache-first HTML can keep
-    // pointing at hashed JS chunks from a previous deployment after Pages
-    // has removed those chunks; network-first retains an offline fallback.
-    event.respondWith(networkFirst(new Request(SHELL_URL)));
+    event.respondWith(networkFirst(new Request(SHELL_URL), true));
     return;
   }
 
