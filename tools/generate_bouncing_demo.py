@@ -31,9 +31,10 @@ for i in range(1,N):
  square(pos[i-1],bg);square(pos[i],color);code.extend((movz(1),0xb9001280))
  b=len(code);code.append(0x14000000|((ldr-b)&0x3ffffff))
 if len(code)>INS: raise RuntimeError(f"code overflow: {len(code)}")
-frame_one = wait + 1
+# After the final frame's handshake, skip padding and restart at the LDR.
+# Branching to the CBNZ itself would reuse stale W9 and eventually fall off.
 code.extend([0xd503201f]*(INS-len(code)))
-code[-1] = 0x14000000 | ((frame_one-(INS-1)) & 0x3ffffff)
+code[-1] = 0x14000000 | ((ldr-(INS-1)) & 0x3ffffff)
 ds=HS+W*H*4;image=bytearray(data_off+ds)
 def put(o,v): struct.pack_into("<I",image,o,v&0xffffffff)
 put(0x10,0x304f524e);put(0x18,len(image));put(0x20,T);put(0x24,INS*4);put(0x30,data_off);put(0x34,ds)
