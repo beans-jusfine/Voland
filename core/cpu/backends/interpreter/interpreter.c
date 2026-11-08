@@ -210,11 +210,9 @@ static bool execute_one(InterpreterState *s) {
       result=read_reg(s,rn,is64,false);
     } else {
       result=read_reg(s,rm,is64,false);
-      if (invert) result=~result;
-      if (transform) result=UINT64_C(0)-result;
-      /* CSINC and CSNEG are distinct encodings: CSNEG applies NEG after
-       * inversion, while CSINC increments the unmodified Rm value. */
-      if (!invert && transform) result=read_reg(s,rm,is64,false)+1u;
+      if (invert && transform) result=UINT64_C(0)-result; /* CSNEG */
+      else if (invert) result=~result;                       /* CSINV */
+      else if (transform) result+=1u;                        /* CSINC */
     }
     write_reg(s,rd,result,is64,false);
     return true;
