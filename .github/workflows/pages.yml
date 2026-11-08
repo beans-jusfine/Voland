@@ -1,4 +1,4 @@
-name: Deploy Voland to Netlify
+name: Deploy Voland to Vercel
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: netlify-production
+  group: vercel-production
   cancel-in-progress: true
 
 env:
@@ -74,16 +74,22 @@ jobs:
         env:
           VOLAND_WEB_MEMORY_PAGES: 24576
         run: pnpm run build
-      - name: Deploy to Netlify
-        if: ${{ vars.NETLIFY_SITE_ID != '' }}
-        working-directory: .
+      - name: Pull Vercel project settings
         env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ vars.NETLIFY_SITE_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          npx --yes netlify-cli@latest deploy \
-            --prod \
-            --dir=platform/web/dist \
-            --site="$NETLIFY_SITE_ID" \
-            --auth="$NETLIFY_AUTH_TOKEN" \
-            --message="GitHub Actions $GITHUB_SHA"
+          test -n "$VERCEL_TOKEN" || (echo "Missing GitHub secret VERCEL_TOKEN" && exit 1)
+          test -n "$VERCEL_ORG_ID" || (echo "Missing GitHub secret VERCEL_ORG_ID" && exit 1)
+          test -n "$VERCEL_PROJECT_ID" || (echo "Missing GitHub secret VERCEL_PROJECT_ID" && exit 1)
+          npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Build Vercel production output
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VOLAND_WEB_MEMORY_PAGES: 24576
+        run: npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+      - name: Deploy to Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
