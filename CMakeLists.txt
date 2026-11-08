@@ -105,7 +105,7 @@ if(EMSCRIPTEN)
     -sEXPORT_NAME=createVolandCoreModule
     -sENVIRONMENT=worker       # only ever instantiated inside cpu.worker.ts
     "-sEXPORTED_FUNCTIONS=['_emulator_create_ffi','_emulator_destroy_ffi',
-                            '_emulator_run_ffi','_emulator_step_ffi','_emulator_load_nro_ffi','_emulator_publish_demo_frame_ffi','_malloc','_free',
+                            '_emulator_run_ffi','_emulator_step_ffi','_emulator_load_nro_ffi','_malloc','_free',
                             '_layout_get_ffi','_cpu_backend_id_ffi',
                             '_cpu_get_reg_ffi','_cpu_set_reg_ffi','_cpu_get_pc_ffi']"
     "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
