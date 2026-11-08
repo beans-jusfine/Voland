@@ -91,7 +91,7 @@ EXPORT uint32_t emulator_get_last_nro_error_ffi(uintptr_t out_ptr, uint32_t capa
   if (!out_ptr || capacity == 0) return 0;
   uint8_t *out = (uint8_t *)out_ptr;
   uint32_t length = 0;
-  while (g_last_nro_error[length] != '\\0' && length + 1u < capacity) {
+  while (g_last_nro_error[length] != '\0' && length + 1u < capacity) {
     out[length] = (uint8_t)g_last_nro_error[length];
     length++;
   }
