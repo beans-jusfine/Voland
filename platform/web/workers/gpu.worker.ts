@@ -38,7 +38,8 @@ async function init(canvas: OffscreenCanvas, memory: WebAssembly.Memory, layout:
   let texture: GPUTexture | null = null;
   let textureWidth = 0;
   let textureHeight = 0;
-  // Nearest-neighbor upscaling keeps low-resolution guest framebuffers crisp instead of smearing pixels.\n  const sampler = device.createSampler({ magFilter: "nearest", minFilter: "nearest" });
+  // Nearest-neighbor upscaling keeps low-resolution guest framebuffers crisp instead of smearing pixels.
+  const sampler = device.createSampler({ magFilter: "nearest", minFilter: "nearest" });
   const shader = device.createShaderModule({ label: "Voland framebuffer blit", code: SHADER });
   const pipeline = device.createRenderPipeline({
     label: "Voland framebuffer presentation pipeline", layout: "auto",
