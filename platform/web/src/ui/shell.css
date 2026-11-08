@@ -1,152 +1,115 @@
 /**
- * Styles for the Solid shell that replaces the boot screen. Kept co-located
- * with the component so it travels in the same dynamic chunk and never
- * ships inside the boot-critical bundle.
+ * Dedicated Voland emulator display with separate loader and event log.
  */
-
 .voland-shell {
   position: fixed;
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, rgba(5, 7, 18, 0.76), rgba(3, 4, 12, 0.58));
+  background: #080910;
   color: #e6e6ea;
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
-
 .voland-header {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 28px;
-  border-bottom: 1px solid #1c1c28;
+  gap: 18px;
+  padding: 16px 24px;
+  border-bottom: 1px solid #202130;
+  background: #0c0d17;
 }
-
-.voland-brand {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.voland-title {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.voland-subtitle {
-  font-size: 12px;
-  color: #6b6b78;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-}
-
-.voland-status {
-  font-size: 12px;
-  color: #8d8d99;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
+.voland-brand { display: flex; align-items: baseline; gap: 12px; }
+.voland-title { font-size: 22px; font-weight: 700; letter-spacing: .02em; }
+.voland-subtitle { font-size: 11px; color: #777b91; text-transform: uppercase; letter-spacing: .13em; }
+.voland-status { color: #9298b0; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .voland-main {
   flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 380px;
   min-height: 0;
-}
-
-.voland-hero {
-  padding: 56px 64px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 24px;
-}
-
-.voland-hero h2 {
-  margin: 0;
-  font-size: 40px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-}
-
-.voland-hero p {
-  margin: 0;
-  color: #9a9aa8;
-  max-width: 52ch;
-  font-size: 15px;
-  line-height: 1.55;
-}
-
-.voland-facts {
-  margin: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-  max-width: 640px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 370px);
+  gap: 22px;
+  padding: 24px;
 }
-
-.voland-facts > div {
-  border: 1px solid #1f1f2b;
-  border-radius: 10px;
-  padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.015);
+.voland-display-column { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.voland-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.voland-section-heading h1 { margin: 0; font-size: 19px; font-weight: 600; }
+.voland-section-heading p { margin: 5px 0 0; color: #85899e; font-size: 12px; line-height: 1.5; }
+.voland-display-state, .voland-panel-heading span {
+  color: #8e9eff; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .12em; border: 1px solid #343b61; border-radius: 20px; padding: 5px 9px;
 }
-
-.voland-facts dt {
-  font-size: 11px;
-  color: #6b6b78;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  margin-bottom: 6px;
-}
-
-.voland-facts dd {
-  margin: 0;
-  font-size: 15px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #e6e6ea;
-}
-
-.voland-log {
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid #1c1c28;
-  background: rgba(0, 0, 0, 0.35);
-  min-height: 0;
-}
-
-.voland-log > header {
-  padding: 14px 18px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  color: #6b6b78;
-  border-bottom: 1px solid #1c1c28;
-}
-
-.voland-log-scroll {
+.voland-display-frame {
   flex: 1;
-  overflow-y: auto;
-  padding: 12px 18px;
-  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-  white-space: pre-wrap;
-  word-break: break-word;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  border: 1px solid #292c3d;
+  border-radius: 13px;
+  background: #03040a;
+  box-shadow: 0 12px 40px rgba(0,0,0,.28);
 }
-
-.voland-log-scroll .log-line  { margin: 0; }
-.voland-log-scroll .log-info  { color: #c8d5ff; }
-.voland-log-scroll .log-warn  { color: #f3c27d; }
+.voland-screen {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 100%;
+  overflow: hidden;
+  background: #05060b;
+  border: 1px solid #1d2030;
+  border-radius: 5px;
+}
+#game {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 1 !important;
+}
+.voland-screen-placeholder {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  color: #5f6479; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.voland-display-caption { display: flex; justify-content: space-between; color: #666b80; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; }
+.voland-facts { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin: 4px 0 0; }
+.voland-facts > div { min-width: 0; border: 1px solid #222536; border-radius: 9px; padding: 11px 12px; background: #0d0f1a; }
+.voland-facts dt { color: #747990; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px; }
+.voland-facts dd { margin: 0; color: #d7daea; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.voland-sidebar { min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+.voland-panel { min-width: 0; border: 1px solid #25283a; border-radius: 12px; background: #0d0f1a; overflow: hidden; }
+.voland-loader { flex: 0 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 11px; }
+.voland-panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.voland-panel-heading h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.voland-panel-heading span { font-size: 9px; padding: 4px 7px; }
+.voland-file-label { color: #c8d0f3; font-size: 12px; font-weight: 600; }
+.voland-file-input { width: 100%; color: #a8a8b5; font: 12px ui-monospace, monospace; }
+.voland-file-name { overflow: hidden; text-overflow: ellipsis; color: #9da2b8; font: 11px ui-monospace, monospace; }
+.voland-load-button { border: 1px solid #5555a0; border-radius: 8px; padding: 10px 14px; background: #29294a; color: #fff; cursor: pointer; font-weight: 600; }
+.voland-load-button:disabled { opacity: .4; cursor: not-allowed; }
+.voland-sample-link { color: #aabaff; font-size: 11px; text-decoration: none; }
+.voland-sample-link:hover { text-decoration: underline; }
+.voland-loader-note { margin: 0; color: #777d93; font-size: 10px; line-height: 1.5; }
+.voland-log { flex: 1; min-height: 120px; display: flex; flex-direction: column; }
+.voland-log > .voland-panel-heading { padding: 13px 15px; border-bottom: 1px solid #222536; }
+.voland-log-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 11px 14px; font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+.voland-log-scroll .log-line { margin: 0 0 4px; }
+.voland-log-scroll .log-info { color: #c8d5ff; }
+.voland-log-scroll .log-warn { color: #f3c27d; }
 .voland-log-scroll .log-error { color: #ff8b8b; }
 .voland-log-scroll .log-debug { color: #8d8d99; }
 .voland-log-scroll .log-trace { color: #5a5a66; }
-
-.voland-loader { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px 12px; max-width:560px; padding:18px; border:1px solid #28283a; border-radius:12px; background:rgba(255,255,255,.025); }
-.voland-file-label { color:#c8d5ff; font-size:13px; font-weight:600; }
-.voland-file-input { grid-column:1/-1; width:100%; color:#a8a8b5; font:13px ui-monospace,monospace; }
-.voland-file-name { min-width:0; overflow:hidden; text-overflow:ellipsis; color:#aaaab8; font:12px ui-monospace,monospace; align-self:center; }
-.voland-load-button { border:1px solid #5555a0; border-radius:8px; padding:9px 16px; background:#29294a; color:#fff; cursor:pointer; }
-.voland-load-button:disabled { opacity:.4; cursor:not-allowed; }
-.voland-sample-link { grid-column:1/-1; color:#aabaff; font-size:12px; text-decoration:none; }
-.voland-sample-link:hover { text-decoration:underline; }
-.voland-loader-note { grid-column:1/-1; margin:0!important; font-size:11px!important; color:#777787!important; }
-@media (max-width:900px) { .voland-main { grid-template-columns:1fr; grid-template-rows:1fr 240px; overflow:auto; } .voland-hero { padding:28px 22px; } .voland-hero h2 { font-size:30px; } .voland-facts { grid-template-columns:1fr; } .voland-log { border-left:0; border-top:1px solid #1c1c28; } }
+@media (max-width: 900px) {
+  .voland-main { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(300px,1fr) auto; overflow: auto; padding: 16px; }
+  .voland-sidebar { min-height: 420px; }
+  .voland-log { min-height: 220px; }
+}
+@media (max-width: 520px) {
+  .voland-header { align-items: flex-start; flex-direction: column; padding: 13px 16px; gap: 7px; }
+  .voland-main { padding: 12px; gap: 14px; }
+  .voland-facts { grid-template-columns: 1fr; }
+  .voland-section-heading h1 { font-size: 17px; }
+}
