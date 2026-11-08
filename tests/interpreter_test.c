@@ -151,11 +151,11 @@ int main(void) {
   /* UDIV/SDIV: signed and unsigned 32/64-bit division, zero divisor,
    * and the signed minimum / -1 overflow edge case. */
   const uint32_t division_program[] = {
-    UINT32_C(0x9ac20c20), /* UDIV X0, X1, X2 */
+    UINT32_C(0x9ac20820), /* UDIV X0, X1, X2 */
     UINT32_C(0x9ac20c44), /* SDIV X4, X2, X2 */
-    UINT32_C(0x1ac20c65), /* UDIV W5, W3, W2 */
+    UINT32_C(0x1ac20865), /* UDIV W5, W3, W2 */
     UINT32_C(0x1ac20c86), /* SDIV W6, W4, W2 */
-    UINT32_C(0x9ac20c27), /* UDIV X7, X1, X2 (zero divisor) */
+    UINT32_C(0x9ac20827), /* UDIV X7, X1, X2 */
     UINT32_C(0x9ac20c48), /* SDIV X8, X2, X2 */
   };
   CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0xf0, division_program, sizeof(division_program)));
@@ -173,7 +173,7 @@ int main(void) {
   CHECK(backend->get_reg(state, 8) == 1);
 
   const uint32_t signed_division_program[] = {
-    UINT32_C(0x9ac20c20), /* UDIV X0, X1, X2 */
+    UINT32_C(0x9ac20c20), /* SDIV X0, X1, X2 */
     UINT32_C(0x9ac20c41), /* SDIV X1, X2, X2 */
   };
   CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0x120, signed_division_program, sizeof(signed_division_program)));
@@ -188,7 +188,7 @@ int main(void) {
   CHECK(backend->get_reg(state, 1) == (uint64_t)-1);
 
   const uint32_t division_edges[] = {
-    UINT32_C(0x9ac20c20), /* UDIV X0, X1, X2: zero divisor */
+    UINT32_C(0x9ac20820), /* UDIV X0, X1, X2: zero divisor */
     UINT32_C(0x9ac20c41), /* SDIV X1, X2, X2: INT64_MIN / -1 */
   };
   CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0x130, division_edges, sizeof(division_edges)));
