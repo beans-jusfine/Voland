@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a static 96x54 VFB2 square-and-circle calibration NRO."""
+"""Generate an animated 96x54 VFB2 square-and-circle calibration NRO."""
 import struct
 from pathlib import Path
 
@@ -65,12 +65,43 @@ for index, pixel in enumerate(pixels):
     code.extend((movz_w(pixel), movk_w16(pixel >> 16), str_w(index % CHUNK_PIXELS)))
     if index % CHUNK_PIXELS == CHUNK_PIXELS - 1 and index + 1 < W * H:
         code.append(add_x_imm(1, 1, 4, shift12=True))
-# Set frame_ready only after every pixel write has completed.
+# Publish the initial calibration image only after all pixels are written.
 code.extend((movz_w(1), 0xb9001280))  # STR W0, [X20, #16]
-if len(code) + 1 > INSTRUCTIONS:
-    raise RuntimeError("calibration frame exceeds instruction budget")
-code.extend([0xd503201f] * (INSTRUCTIONS - len(code) - 1))
-code.append(0x14000000)  # branch to itself after publishing the static image
+
+# Animate a visible 5x5 marker near the upper-right corner. The guest waits
+# until the host clears frame_ready, toggles the marker color, and republishes.
+marker_x, marker_y, marker_size = 84, 3, 5
+marker_index = marker_y * W + marker_x
+code.extend((add_x_imm(1, 20, HEADER_SIZE + marker_index * 4),
+             movz_w(10, 0), movz_w(11, 1)))
+
+wait_index = len(code)
+code.append(0xb9400000 | (4 << 10) | (20 << 5) | 9)  # LDR W9, [X20, #16]
+cbnz_index = len(code)
+code.append(0x35000000 | (((wait_index - cbnz_index) & 0x7ffff) << 5) | 9)
+code.append(0x4a000000 | (11 << 16) | (10 << 5) | 10)  # EOR W10, W10, W11
+color_branch = len(code)
+code.append(0)  # CBNZ W10, color_one
+color_zero = rgba(0, 220, 255)
+color_one = rgba(255, 45, 180)
+code.extend((movz_w(color_zero), movk_w16(color_zero >> 16)))
+skip_color_one = len(code)
+code.append(0)  # B store_marker
+color_one_index = len(code)
+code.extend((movz_w(color_one), movk_w16(color_one >> 16)))
+store_marker_index = len(code)
+code[color_branch] = 0x35000000 | (((color_one_index - color_branch) & 0x7ffff) << 5) | 10
+code[skip_color_one] = 0x14000000 | ((store_marker_index - skip_color_one) & 0x3ffffff)
+for dy in range(marker_size):
+    for dx in range(marker_size):
+        code.append(str_w(dy * W + dx))
+code.extend((movz_w(1), 0xb9001280))  # STR W0, [X20, #16]
+branch_index = len(code)
+code.append(0x14000000 | ((wait_index - branch_index) & 0x3ffffff))
+
+if len(code) > INSTRUCTIONS:
+    raise RuntimeError("animated calibration demo exceeds instruction budget")
+code.extend([0xd503201f] * (INSTRUCTIONS - len(code)))
 
 file_size = data_off + data_size
 image = bytearray(file_size)
