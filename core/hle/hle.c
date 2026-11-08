@@ -163,4 +163,6 @@ void hle_on_undefined(CPU_State *cpu_state, uint32_t instruction, void *userdata
   log_error("[hle] undefined instruction 0x%08x at PC 0x%016llx",
             instruction,
             (unsigned long long)pc);
+  /* TODO: Implement specific instruction handling or escalate to interpreter
+   * for now, the fault will propagate as CPU_EXIT_FAULT */
 }
