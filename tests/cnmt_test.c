@@ -95,7 +95,8 @@ static void test_valid_layout(CNMT_Content_Layout layout) {
   CHECK(memcmp(cnmt.contents[0].hash, fixture + FIXTURE_CONTENT_OFFSET, 32) == 0);
   CHECK(memcmp(cnmt.contents[0].content_id,
                fixture + FIXTURE_CONTENT_OFFSET + 0x20, 16) == 0);
-  CHECK(cnmt.contents[0].size == 0x010203040506ull);
+  CHECK(cnmt.contents[0].size ==
+        (layout == CNMT_CONTENT_LAYOUT_MODERN ? 0x0203040506ull : 0x010203040506ull));
   CHECK(cnmt.contents[0].attributes ==
         (layout == CNMT_CONTENT_LAYOUT_MODERN ? 0x5A : 0));
   CHECK(cnmt.contents[0].content_type == 2);
