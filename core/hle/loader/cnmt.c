@@ -18,6 +18,12 @@ static uint64_t read_le48(const uint8_t *p) {
          ((uint64_t)p[4] << 32) | ((uint64_t)p[5] << 40);
 }
 
+static uint64_t read_le40(const uint8_t *p) {
+  return (uint64_t)p[0] | ((uint64_t)p[1] << 8) |
+         ((uint64_t)p[2] << 16) | ((uint64_t)p[3] << 24) |
+         ((uint64_t)p[4] << 32);
+}
+
 static Error cnmt_read(const Byte_Source *source, uint64_t offset,
                        void *out, uint64_t size) {
   return byte_source_read(source, offset, out, size);
@@ -103,7 +109,9 @@ Error cnmt_open(const Byte_Source *source, Arena *arena,
     memcpy(entry->hash, raw, CNMT_CONTENT_HASH_SIZE);
     memcpy(entry->content_id, raw + CNMT_CONTENT_HASH_SIZE,
            CNMT_CONTENT_ID_SIZE);
-    entry->size = read_le48(raw + CNMT_CONTENT_SIZE_OFFSET);
+    entry->size = layout == CNMT_CONTENT_LAYOUT_MODERN
+                      ? read_le40(raw + CNMT_CONTENT_SIZE_OFFSET)
+                      : read_le48(raw + CNMT_CONTENT_SIZE_OFFSET);
     entry->attributes = layout == CNMT_CONTENT_LAYOUT_MODERN
                             ? raw[CNMT_CONTENT_ATTRIBUTES_OFFSET]
                             : 0;
