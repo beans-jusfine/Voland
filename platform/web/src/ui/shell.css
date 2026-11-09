@@ -23,3 +23,23 @@
 
 .voland-memory-monitor{margin-top:18px;padding:20px;border:1px solid #292d42;border-radius:12px;background:#0d0f1a}.voland-memory-description{margin:10px 0 16px;color:#858ca4;font-size:10px;line-height:1.6}.voland-memory-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.voland-memory-card{min-width:0;padding:13px;border:1px solid #252a3d;border-radius:9px;background:#111521;display:flex;flex-direction:column;gap:8px}.voland-memory-card span{color:#747c99;font-size:8px;font-weight:800;letter-spacing:.12em}.voland-memory-card strong{font:13px ui-monospace,monospace;overflow-wrap:anywhere;color:#e4e7f5}.voland-memory-meter{margin-top:18px}.voland-memory-meter>div:first-child{display:flex;justify-content:space-between;color:#9ba2b8;font-size:10px}.voland-memory-meter>div:first-child strong{color:#cbd0ff;font:11px ui-monospace,monospace}.voland-memory-track{height:8px;margin:9px 0 7px;border-radius:8px;background:#24283b;overflow:hidden}.voland-memory-fill{height:100%;border-radius:8px;background:linear-gradient(90deg,#6d72ed,#63d5ad);transition:width .25s ease}.voland-memory-meter small{color:#737b94;font-size:9px}
 @media(max-width:900px){.voland-memory-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+.voland-home-menu-option{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:18px;padding:15px 18px;border:1px solid #292d42;border-radius:11px;background:#111521}
+.voland-home-menu-option>div{display:flex;flex-direction:column;gap:5px}
+.voland-home-menu-option strong,.voland-navigation-panel strong{font-size:11px;color:#e8eaff}
+.voland-home-menu-option small{font-size:10px;color:#838aa2}
+.voland-toggle{display:flex;align-items:center;gap:9px;cursor:pointer;color:#aeb5d1;font:10px ui-monospace,monospace}
+.voland-toggle input{position:absolute;width:1px;height:1px;opacity:0}
+.voland-toggle-track{position:relative;width:34px;height:19px;flex:0 0 34px;border:1px solid #444967;border-radius:20px;background:#20243a;transition:background .15s,border-color .15s}
+.voland-toggle-track:after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:#9299b5;transition:transform .15s,background .15s}
+.voland-toggle input:checked+.voland-toggle-track{background:#353b86;border-color:#858bff}
+.voland-toggle input:checked+.voland-toggle-track:after{transform:translateX(15px);background:#fff}
+.voland-toggle input:focus-visible+.voland-toggle-track{outline:2px solid #a4a8ff;outline-offset:3px}
+.voland-toggle-label{min-width:22px;color:#9da5c4}
+.voland-navigation-panel{padding:14px;display:flex;flex-direction:column;gap:12px}
+.voland-navigation-panel .voland-panel-heading{width:100%}
+.voland-navigation-panel .voland-toggle{flex-wrap:wrap}
+.voland-home-menu-button{width:100%;border:1px solid #777cff;border-radius:7px;padding:10px;background:linear-gradient(135deg,#686df0,#4c50b8);color:#fff;font-size:10px;font-weight:800;letter-spacing:.1em;cursor:pointer}
+.voland-home-menu-button:hover{filter:brightness(1.13)}
+@media(max-width:650px){.voland-home-menu-option{align-items:flex-start;flex-direction:column}}
