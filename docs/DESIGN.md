@@ -1502,6 +1502,8 @@ Games will not boot past the first frame without these, in order:
 
 Per §1.6, `core/hle/loader/` operates on pre-decrypted NCA only. On encrypted input it returns `RESULT_ENCRYPTED_INPUT` with a message directing the user to `docs/DUMP.md`. Detection is structural, in two stages: an encrypted NCA's header is ciphertext, so a missing `NCA3`/`NCA2` magic is reported as encrypted-or-not-an-NCA (same user action either way); a header that parses over sections lacking their own structure magic (`PFS0`, RomFS header) is a half-decrypted dump and gets the same result from `nca_probe_section()`. Nothing is hash- or signature-verified: those layers guard encrypted media against tampering, and a user's own plaintext dump has no adversary — bounds are enforced everywhere because the input is untrusted for *memory safety* (§19), never for authenticity. All parsers read through `byte_source.h` (a synchronous read callback plus bounded slices) rather than a whole-image buffer, because on web the image is a `File` read piecewise via `blob.slice()` (§15).
 
+The CNMT parser (`cnmt.{h,c}`) consumes the extracted plaintext `.cnmt` payload as a bounded `Byte_Source`; locating that file in the Meta NCA's PFS0 is a separate loader step. It decodes the fixed PackagedContentMeta header, legacy or modern 0x38-byte content records (selected explicitly by the caller), and 0x10-byte content-meta records into caller-owned arena storage. It bounds-checks the extended header and both record tables, but does not interpret type-specific extended data or verify the trailing digest. This is metadata inventory only: it does not decrypt, extract encrypted packages, or assemble/boot Horizon.
+
 ---
 
 ## 13. GPU Architecture
