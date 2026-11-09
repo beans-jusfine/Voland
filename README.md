@@ -4,7 +4,7 @@ A Nintendo Switch emulator targeting the web as a primary platform, with native 
 
 Play Switch games in your browser. No installation. No setup beyond providing your own keys and games.
 
-> **Status:** Early development: **Phase 1 (Load & Memory)** of [DESIGN.md §25](docs/DESIGN.md#25-development-phases). Phase 0 and most of Phase 1 have landed, including the softmmu, pre-decrypted NCA/NSO loading, process bootstrap, TLS, memory SVCs, and a user-supplied system-software preflight inventory. CI covers native GCC/Clang/MSVC and Emscripten/WASM. This inventory does not yet assemble a complete firmware set or boot Horizon OS; guest code execution and the genuine HOME Menu are not available yet.
+> **Status:** Early development: **Phase 1 (Load & Memory)** of [DESIGN.md §25](docs/DESIGN.md#25-development-phases). Phase 0 and most of Phase 1 have landed, including the softmmu, pre-decrypted NCA/NSO loading, CNMT metadata parsing, process bootstrap, TLS, memory SVCs, and a user-supplied system-software preflight inventory. CI covers native GCC/Clang/MSVC and Emscripten/WASM. This inventory does not yet assemble a complete firmware set or boot Horizon OS; guest code execution and the genuine HOME Menu are not available yet.
 
 ---
 
