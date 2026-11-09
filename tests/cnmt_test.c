@@ -17,7 +17,7 @@ static uint8_t fixture[FIXTURE_TOTAL_SIZE];
 static uint8_t original[FIXTURE_TOTAL_SIZE];
 
 typedef union Test_Arena_Memory {
-  max_align_t alignment;
+  uint64_t alignment;
   uint8_t bytes[2048];
 } Test_Arena_Memory;
 
