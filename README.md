@@ -4,7 +4,7 @@ A Nintendo Switch emulator targeting the web as a primary platform, with native 
 
 Play Switch games in your browser. No installation. No setup beyond providing your own keys and games.
 
-> **Status:** Early development: **Phase 1 (Load & Memory)** of [DESIGN.md §25](docs/DESIGN.md#25-development-phases). Phase 0 and most of Phase 1 have landed and pass CI natively and under Emscripten: the softmmu, decrypted-NCA and NSO loading with process bootstrap, TLS, the memory SVCs, minimal IPC with an `sm:` stub, and the wasm32 memory model (a ~4 GiB shared memory that the e2e allocates in Chromium, Firefox and WebKit). Next are the input region and the encrypted-input error path. Nothing executes guest code yet: the interpreter arrives in Phase 2, and the web JIT (Voland's own ARM64→WASM translator, `wasm_jit`, designed in [WASM_JIT.md](docs/WASM_JIT.md)) lands in Phase 5.
+> **Status:** Early development: **Phase 1 (Load & Memory)** of [DESIGN.md §25](docs/DESIGN.md#25-development-phases). Phase 0 and most of Phase 1 have landed, including the softmmu, pre-decrypted NCA/NSO loading, process bootstrap, TLS, memory SVCs, and a user-supplied system-software preflight inventory. CI covers native GCC/Clang/MSVC and Emscripten/WASM. This inventory does not yet assemble a complete firmware set or boot Horizon OS; guest code execution and the genuine HOME Menu are not available yet.
 
 ---
 
@@ -20,12 +20,9 @@ Native apps on iOS, Android, macOS, tvOS, Windows, Linux, and Xbox share the sam
 
 ## Requirements
 
-To play games you must provide:
+To use content with Voland, you must provide your own legally obtained, **pre-decrypted NCA files**. This includes game content and, when working toward system boot, system-software/firmware content dumped from hardware you own. Prepare/decrypt content outside Voland with separate tools before importing it.
 
-- **prod.keys** - cryptographic keys dumped from your own Nintendo Switch using [Lockpick_RCM](https://github.com/s1204IT/Lockpick_RCM)
-- **Game files** - NSP or XCI files dumped from cartridges or digital purchases you own
-
-Voland does not and will never distribute keys, firmware, or game files. These must come from hardware you own. See the [dumping guide](docs/DUMP.md) for instructions.
+Voland does not distribute firmware, keys, encrypted NSP/XCI files, or game content. It does not read `prod.keys`, derive Nintendo keys, decrypt content, or connect to Nintendo services. Keys and encrypted source dumps stay outside Voland; only supported pre-decrypted NCA files are passed to its loader. See the [dumping guide](docs/DUMP.md) for the project's input boundary.
 
 ---
 

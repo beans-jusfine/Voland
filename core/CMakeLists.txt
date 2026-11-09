@@ -21,6 +21,7 @@ set(SWITCH_CORE_SOURCES
   hle/services/sm/sm.c
   hle/loader/byte_source.c
   hle/loader/nca_parse.c
+  hle/loader/system_software.c
   hle/loader/exefs.c
   hle/loader/romfs.c
   hle/loader/npdm.c
@@ -70,6 +71,7 @@ set(SWITCH_CORE_PUBLIC_HEADERS
   hle/services/sm/sm.h
   hle/loader/byte_source.h
   hle/loader/nca_parse.h
+  hle/loader/system_software.h
   hle/loader/exefs.h
   hle/loader/romfs.h
   hle/loader/npdm.h
