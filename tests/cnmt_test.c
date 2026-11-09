@@ -4,6 +4,7 @@
 
 #include "hle/loader/cnmt.h"
 
+#include <stddef.h>
 #include <string.h>
 
 #define FIXTURE_EXT_SIZE 4u
