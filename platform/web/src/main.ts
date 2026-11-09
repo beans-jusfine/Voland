@@ -17,6 +17,7 @@ import { detectCapabilities, type PlatformCapabilities } from "./capabilities";
 import { publishBootMilestone, publishLayoutMilestone } from "./e2e-hooks";
 import { appendLogLine, setFps, setMemoryStats, setStatus } from "./log";
 import { createSharedMemory, TOTAL_MEMORY_BYTES, TOTAL_MEMORY_PAGES } from "./memory";
+import { InputRegionWriter, pollGamepads } from "./input-region";
 
 const WORKER_READY_TIMEOUT_MS = 10_000;
 
@@ -282,11 +283,24 @@ async function boot(): Promise<BootResult | null> {
   // closures (the "layout" case above), so it treats `layout` as still
   // `null` here; the cast reasserts the declared type.
   const finalLayout = layout as MemoryLayout | null;
+  let inputFrame = 0;
+  let inputPolling = true;
+  if (finalLayout) {
+    const inputWriter = new InputRegionWriter(memory.buffer, finalLayout.inputRegionBase);
+    const pollInput = () => {
+      if (!inputPolling) return;
+      if (!document.hidden) pollGamepads(inputWriter);
+      inputFrame = window.requestAnimationFrame(pollInput);
+    };
+    inputFrame = window.requestAnimationFrame(pollInput);
+  }
   return {
     adapterLabel: adapterLabel ?? "unavailable",
     cpuBackend:   cpuBackend   ?? "unavailable",
     guestRamMiB: finalLayout ? finalLayout.guestRamSize / (1024 * 1024) : 0,
     onStopEmulator: () => {
+      inputPolling = false;
+      if (inputFrame !== 0) window.cancelAnimationFrame(inputFrame);
       appendLogLine("info", "emulator: stop requested");
       setStatus("stopping");
       let finished = false;

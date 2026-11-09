@@ -4,6 +4,7 @@ set(SWITCH_CORE_SOURCES
   common/log.c
   common/arena.c
   common/layout.c
+  common/input_region.c
   common/vmm.c
   cpu/cpu.c
   cpu/backends/noop/noop.c
@@ -57,6 +58,7 @@ set(SWITCH_CORE_PUBLIC_HEADERS
   common/assert.h
   common/result.h
   common/layout.h
+  common/input_region.h
   common/vmm.h
   cpu/cpu.h
   cpu/backends/noop/noop.h
@@ -87,6 +89,10 @@ set(SWITCH_CORE_PUBLIC_HEADERS
 )
 
 add_library(switch_core STATIC ${SWITCH_CORE_SOURCES} ${SWITCH_CORE_THIRD_PARTY_SOURCES})
+
+# MSVC gates its C11 <stdatomic.h> implementation behind an experimental flag.
+# PUBLIC propagates it to tests and consumers that include public atomic headers.
+target_compile_options(switch_core PUBLIC "$<$<C_COMPILER_ID:MSVC>:/experimental:c11atomics>")
 
 target_include_directories(switch_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

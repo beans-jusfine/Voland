@@ -2125,21 +2125,21 @@ v2 forwarded gamepad state via postMessage every rAF: per-frame allocation, a ta
 ```
 INPUT_REGION_BASE: per controller slot (×8, 64 bytes; v3.29 adds motion):
   +0    sequence counter (u32, atomic)   // seqlock
-  +4    buttons bitmask  (u32)
-  +8    axes             (8 × i16)
-  +24   flags            (u32: connected, npad style §12, profile id)
-  +28   motion sample    (u32: increments per new IMU sample; 0 = no sensor)
-  +32   accelerometer    (3 × f32, g)
-  +44   gyroscope        (3 × f32, rad/s)
-  +56   reserved         (8 bytes)
+  +4    buttons bitmask  (u32, atomic)
+  +8    axes             (8 × atomic i16)
+  +24   flags            (u32, atomic: connected, npad style §12, profile id)
+  +28   motion sample    (u32, atomic: increments per new IMU sample; 0 = no sensor)
+  +32   accelerometer    (3 × atomic u32 float bit patterns, g)
+  +44   gyroscope        (3 × atomic u32 float bit patterns, rad/s)
+  +56   reserved         (8 atomic bytes)
 then one touch block (v3.29):
   +0    sequence counter (u32, atomic)   // seqlock
-  +4    point count      (u32, ≤ 10)
-  +8    points ×10       (finger id u32, x f32, y f32, in 1280×720 screen space)
+  +4    point count      (u32, atomic; ≤ 10)
+  +8    points ×10       (finger id u32, x/y f32 bit patterns; each field atomic) in 1280×720 screen space)
 ```
 
-- **Main thread (writer), each rAF:** bump sequence to odd → write payload → bump to even (release ordering).
-- **CPU Worker `hid:` service (reader), at guest HID poll rate:** read sequence (acquire); if odd, or changed across the payload read, retry. No torn reads, no waiting, no allocation.
+- **Main thread (sole writer), each rAF:** publish an odd sequence → atomically write every payload field → publish the next even sequence. JavaScript `Atomics` operations are sequentially consistent. Float payloads are stored as their 32-bit IEEE-754 bit patterns through integer atomic views.
+- **CPU Worker `hid:` service (reader), at guest HID poll rate:** read the sequence, atomically load the payload, then read the sequence again; accept only an unchanged even sequence. The C reader uses sequentially consistent atomic loads for both sequence and payload fields, avoiding non-atomic C/JS data races. Retries are bounded (8 attempts); a persistently odd/changing slot is skipped rather than blocking indefinitely.
 - Connect/disconnect/profile changes go over postMessage (lifecycle events, §16).
 
 **Output region (v3.29): rumble and player LEDs, CPU → main.** Games send vibration values and set player LEDs through `hid:`. Per-frame data can't ride postMessage, so it travels back the way input arrives:
@@ -2593,7 +2593,7 @@ Build-verified: both the `native-noop` and `web` presets configure, compile, and
 - [x] **Memory HLE (SetHeapSize, MapMemory, QueryMemory) as thin vmm layers** — the checkbox's four SVCs (UnmapMemory is MapMemory's inverse, named alongside the other three in §12's priority list). *v3.27: `hle/kernel/svc_memory.{h,c}`; register ABI and MapMemory/UnmapMemory semantics verified against libnx's `svc.s`/`svc.h`/`thread.c` rather than assumed (SetHeapSize's size arrives in X1, not X0). Two scoped-down simplifications, documented in `svc_memory.h` and the "Deviation" note after §12's HLE result type: UnmapMemory requires an exact match against a recorded MapMemory call (no partial unmap); QueryMemory's `MemoryInfo.type`/`attr` model only the address-space regions reachable by a Phase 1 title, not Horizon's full ~30-value enum. `page_allocator.h` gained the release path (a small freelist) it had already anticipated needing for SetHeapSize's shrink and process teardown. Full account in the Changelog v3.26 → v3.27 entry.*
 - [x] **Minimal IPC + sm: stub.** *v3.30: HIPC/CMIF framing, service-object dispatch and a Phase 1 session table in `hle/kernel/ipc.{h,c}`; ConnectToNamedPort (0x1F), SendSyncRequest (0x21) and CloseHandle (0x16) in `hle/kernel/svc_ipc.{h,c}` (split from `ipc` like `svc_memory` from `vmm`); `hle/services/sm/sm.{h,c}` answers RegisterClient (explicit stub) and GetServiceHandle against a host-side registry. Wire format verified against libnx's `sf/hipc.h`/`sf/cmif.h`, and tested with libnx's request bytes and libnx's response-reading logic. Close messages are accepted; TIPC is recognised and deferred (§12). Sessions are per-process: unload empties the table. Full account in the Changelog v3.29 → v3.30 entry.*
 - [x] **wasm32 memory model** (v3.29, §4): guest RAM sized to the application pool plus the HLE carve-out; `-m64` dropped and `INITIAL_MEMORY` set to 65535 pages (§24); `main.ts` and the bindings on Number pointers; native guest RAM reserved without committing; Firefox and WebKit Playwright projects, with e2e asserting the allocation per engine. *v3.31: `layout.h` gains the pool, carve-out and linear-memory constants and `layout_guest_ram_commit()`, which `page_allocator_allocate` calls; Windows reserves with `MEM_RESERVE` and commits per allocation, POSIX maps with `MAP_NORESERVE`; the §4 host budget is a static assert; svcSetHeapSize zeroes the pages it maps, since freed pages are not decommitted; `bindings/layout.ts` narrows each field to a Number below 2^32; `src/memory.ts` holds the descriptor shared by boot and the e2e. Full account in the Changelog v3.30 → v3.31 entry.*
-- [ ] Input region + seqlock writer/reader (§18; v3.29 layout with motion and touch, output region reserved)
+- [x] Input region + seqlock writer/reader (§18; v3.29 layout with motion and touch, output region reserved). *v3.33: fixed 64-byte controller slots and 128-byte touch block now have a C11 atomic ABI, bounded C snapshot readers, and a main-thread Gamepad API writer; every shared payload field is atomic to avoid C/JS data races.*
 - [ ] User-facing error path for encrypted input → dumping guide
 
 ### Phase 2 — First Instructions
