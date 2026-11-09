@@ -9,6 +9,7 @@ A Nintendo Switch emulator targeting the web as a primary platform, with native 
 1. [Project Overview](#1-project-overview)
    - 1.5 [Non-Goals](#15-non-goals)
    - 1.6 [Legal Scope Boundaries](#16-legal-scope-boundaries)
+   - 1.7 [User-Provided Keys and Encrypted Game Inputs](#17-user-provided-keys-and-encrypted-game-inputs)
 2. [Repository Structure](#2-repository-structure)
 3. [Core Principles](#3-core-principles)
 4. [Memory Architecture](#4-memory-architecture)
@@ -110,7 +111,7 @@ To keep the project focused, several things are explicitly NOT goals. Contributo
 
 ## 1.6 Legal Scope Boundaries
 
-Voland's design avoids functionality that has been the subject of recent emulator-targeted legal action. These boundaries are non-negotiable scope decisions, not optimizations to revisit later.
+> **Architecture status: superseded.** The pre-decrypted-only input restriction described in this historical section is no longer the product direction. The active engineering direction is §1.7. This change records a technical scope decision; it is not legal advice or a conclusion about the legality of any particular use.
 
 ### No decryption of Nintendo-encrypted content
 
@@ -174,6 +175,30 @@ If a user attempts to load an encrypted NSP or XCI file, Voland reports an error
 The CPU backends (`core/cpu/`) implement the A57's instruction set, including the Cryptographic Extension's AES, SHA and PMULL instructions (v3.28; WASM_JIT.md J17 question 1). That is not decryption code. When a game executes AESD, the game's own code is processing its own data, as on hardware, just as its save crypto runs inside the emulator and Voland never does it (§20). Voland's host code never uses these instructions and never supplies a key. Leaving them undefined would stop nothing, since guest code can compute AES in software on any CPU; it would only break the titles that use them. QEMU, the posture model above, implements the same instructions. The review tripwire's standing exception for them is listed in CONTRIBUTING.md.
 
 ---
+
+## 1.7 User-Provided Keys and Encrypted Game Inputs
+
+Voland's target input workflow is to let each user provide files dumped from hardware and software they own, then process those files locally in the emulator. The web UI will provide separate Settings inputs for `prod.keys` and `title.keys`, plus game-file selection for supported encrypted NSP and XCI containers.
+
+### Requirements
+
+- Keys and game files are selected by the user. Voland never ships, downloads, hosts, or shares keys, firmware, or game content.
+- All parsing and cryptographic processing happens locally on the user's device. No key bytes, game contents, derived keys, or content metadata are sent to Voland-operated services.
+- Key material remains memory-only by default. Persistent storage, if later implemented, must be an explicit opt-in with clear status and a reliable delete/replace action; do not put raw keys in localStorage.
+- The UI must distinguish missing keys, malformed key files, unsupported key revisions, missing title keys, unsupported container formats, and corrupt game files with actionable errors. Never display or log key values.
+- Key import and game loading are separate concerns. A successful key-file import does not imply that a game can boot; container parsing, NCA processing, content discovery, executable loading, CPU execution, HLE, GPU, and audio remain separate milestones.
+- Support only user-provided files. Do not add Nintendo server access, online authentication, telemetry, remote key lookup, or any feature that distributes copyrighted content.
+- Implement formats from their public structural requirements and independently authored code. Do not copy code from other emulators or reverse-engineering projects.
+
+### Delivery sequence
+
+1. Add separate `prod.keys` and `title.keys` selectors to Settings, with in-memory state, validation, replace/clear controls, and tests.
+2. Add documented key parsing and key-revision diagnostics without exposing key contents.
+3. Add NSP/PFS0 and XCI container inspection and content inventory.
+4. Add the required local NCA processing and content decryption path.
+5. Connect discovered program content to the existing loader, then advance execution, HLE, GPU, and audio support based on the phase plan.
+
+The current implementation may still accept only the existing pre-decrypted NCA path until these milestones land. Documentation and UI must state the actual capability of the build rather than presenting planned support as already working.
 
 ## 2. Repository Structure
 

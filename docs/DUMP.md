@@ -1,6 +1,8 @@
 # Dumping Guide
 
-This guide covers how to produce the files Voland requires from a Nintendo Switch you own. These steps require a Nintendo Switch that can run custom firmware. **This guide is for your own hardware only.**
+> **Transition note (November 2026):** This guide currently documents the existing pre-decrypted-NCA workflow. Voland's new target architecture will accept user-provided `prod.keys`, `title.keys`, and supported encrypted game containers locally. The Settings inputs and encrypted-content pipeline are not implemented yet; follow this guide for the current build until those features are released.
+
+This guide covers how to produce the files Voland currently requires from a Nintendo Switch you own. These steps require a Nintendo Switch that can run custom firmware. **This guide is for your own hardware only.**
 
 Voland does not endorse piracy. Do not use this guide to obtain files from hardware you do not own.
 
