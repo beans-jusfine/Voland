@@ -3,6 +3,7 @@
  */
 import { For, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import type { LogEntry } from "../log";
+import { parseKeyFile } from "../keys";
 import { appendLogLine, getFps, getLogHistory, getMemoryStats, getStatus, subscribeFps, subscribeLogs, subscribeMemoryStats, subscribeStatus } from "../log";
 
 interface AppProps {
@@ -34,8 +35,8 @@ interface ImportedKeyFile {
   readonly name: string;
   readonly byteLength: number;
   readonly entryCount: number;
-  /** Kept in memory only; never logged or persisted. */
-  readonly contents: string;
+  /** Parsed key bytes stay in memory only; never logged or persisted. */
+  readonly keys: ReadonlyMap<string, Uint8Array>;
 }
 
 function inspectKeyFile(file: File, contents: string): ImportedKeyFile {
@@ -45,14 +46,8 @@ function inspectKeyFile(file: File, contents: string): ImportedKeyFile {
   if (file.size > 2 * 1024 * 1024) {
     throw new Error("Key files larger than 2 MiB are not supported.");
   }
-  const entries = contents.split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#") &&
-      /^[A-Za-z0-9_]+\s*=\s*[0-9a-fA-F]+$/.test(line));
-  if (entries.length === 0) {
-    throw new Error("This does not look like a keys file. Expected KEY_NAME = hexadecimal_value entries.");
-  }
-  return { name: file.name, byteLength: file.size, entryCount: entries.length, contents };
+  const keys = parseKeyFile(contents);
+  return { name: file.name, byteLength: file.size, entryCount: keys.size, keys };
 }
 
 async function firmwareDirectory(): Promise<FileSystemDirectoryHandle> {
