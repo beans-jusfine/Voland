@@ -22,6 +22,7 @@ set(SWITCH_CORE_SOURCES
   hle/loader/byte_source.c
   hle/loader/nca_parse.c
   hle/loader/system_software.c
+  hle/loader/system_content.c
   hle/loader/cnmt.c
   hle/loader/meta_nca.c
   hle/loader/exefs.c
@@ -74,6 +75,7 @@ set(SWITCH_CORE_PUBLIC_HEADERS
   hle/loader/byte_source.h
   hle/loader/nca_parse.h
   hle/loader/system_software.h
+  hle/loader/system_content.h
   hle/loader/cnmt.h
   hle/loader/meta_nca.h
   hle/loader/exefs.h
