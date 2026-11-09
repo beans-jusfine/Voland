@@ -43,3 +43,13 @@
 .voland-home-menu-button{width:100%;border:1px solid #777cff;border-radius:7px;padding:10px;background:linear-gradient(135deg,#686df0,#4c50b8);color:#fff;font-size:10px;font-weight:800;letter-spacing:.1em;cursor:pointer}
 .voland-home-menu-button:hover{filter:brightness(1.13)}
 @media(max-width:650px){.voland-home-menu-option{align-items:flex-start;flex-direction:column}}
+
+.voland-key-file-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+.voland-key-file-card{display:flex;flex-direction:column;gap:9px;min-width:0;padding:14px;border:1px solid #30354d;border-radius:9px;background:#0c0f1b}
+.voland-key-file-card>strong{font-size:12px;color:#e3e6ff}
+.voland-key-file-card>span{min-height:28px;color:#9299b0;font:10px/1.5 ui-monospace,monospace;overflow-wrap:anywhere}
+.voland-key-file-input{display:none}
+.voland-key-actions{display:flex;gap:8px;flex-wrap:wrap}
+.voland-key-actions .voland-secondary-button{padding:8px 11px;font-size:9px}
+.voland-key-import-panel .voland-settings-note{line-height:1.6}
+@media(max-width:650px){.voland-key-file-grid{grid-template-columns:1fr}}

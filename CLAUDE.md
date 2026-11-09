@@ -14,10 +14,14 @@ adjacent.
 
 ## Hard rules — violating any of these fails review
 
-1. **NEVER write code that decrypts Nintendo content**, handles prod.keys
-   for decryption, implements key derivation, or parses encrypted NSP/XCI.
-   The loader consumes pre-decrypted NCA only (§1.6). If a task appears to
-   require decryption, STOP and say so instead of implementing it.
+1. **User-supplied keys and encrypted game inputs are in scope.** Voland may
+   accept user-selected `prod.keys` and `title.keys`, parse user-supplied
+   NSP/XCI containers, and perform local content decryption as required by
+   the loader (§1.7). Never bundle keys, firmware, or games; never upload,
+   log, or transmit key material or game contents; never connect to Nintendo
+   services. Keep key bytes in memory by default; any persistent key storage
+   requires an explicit, documented user opt-in and clear/delete controls.
+   Implement independently and never copy code from another emulator.
 2. **Never copy code** from Ryubing, yuzu, dynarmic, Ballistic, or any other
    emulator or recompiler. Read them for behavior; reimplement from the
    observed behavior.

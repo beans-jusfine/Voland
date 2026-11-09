@@ -30,6 +30,31 @@ interface FirmwareManifest {
   readonly sourceFolder: string;
 }
 
+interface ImportedKeyFile {
+  readonly name: string;
+  readonly byteLength: number;
+  readonly entryCount: number;
+  /** Kept in memory only; never logged or persisted. */
+  readonly contents: string;
+}
+
+function inspectKeyFile(file: File, contents: string): ImportedKeyFile {
+  if (file.size === 0 || contents.trim().length === 0) {
+    throw new Error("The selected key file is empty.");
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    throw new Error("Key files larger than 2 MiB are not supported.");
+  }
+  const entries = contents.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#") &&
+      /^[A-Za-z0-9_]+\s*=\s*[0-9a-fA-F]+$/.test(line));
+  if (entries.length === 0) {
+    throw new Error("This does not look like a keys file. Expected KEY_NAME = hexadecimal_value entries.");
+  }
+  return { name: file.name, byteLength: file.size, entryCount: entries.length, contents };
+}
+
 async function firmwareDirectory(): Promise<FileSystemDirectoryHandle> {
   if (!navigator.storage || typeof navigator.storage.getDirectory !== "function") {
     throw new Error("This browser does not support local private file storage (OPFS).");
@@ -116,7 +141,12 @@ function App(props: AppProps) {
   const [firmwareInfo, setFirmwareInfo] = createSignal<FirmwareManifest | null>(null);
   const [firmwareStatus, setFirmwareStatus] = createSignal("No firmware folder imported.");
   const [firmwareBusy, setFirmwareBusy] = createSignal(false);
+  const [prodKeyFile, setProdKeyFile] = createSignal<ImportedKeyFile | null>(null);
+  const [titleKeyFile, setTitleKeyFile] = createSignal<ImportedKeyFile | null>(null);
+  const [keyImportStatus, setKeyImportStatus] = createSignal("No key files loaded. Encrypted game loading is not available yet.");
   let firmwarePicker: HTMLInputElement | undefined;
+  let prodKeyPicker: HTMLInputElement | undefined;
+  let titleKeyPicker: HTMLInputElement | undefined;
 
   onMount(() => {
     const offLogs = subscribeLogs((entry) => {
@@ -159,6 +189,33 @@ function App(props: AppProps) {
     }
   }
 
+
+  async function importKeyFile(kind: "prod" | "title", file: File | undefined): Promise<void> {
+    if (!file) return;
+    try {
+      const imported = inspectKeyFile(file, await file.text());
+      if (kind === "prod") setProdKeyFile(imported);
+      else setTitleKeyFile(imported);
+      const prodReady = kind === "prod" || !!prodKeyFile();
+      const titleReady = kind === "title" || !!titleKeyFile();
+      setKeyImportStatus(prodReady && titleReady
+        ? "Both key files are loaded in memory. The game decryption pipeline is not connected yet."
+        : "Key file loaded in memory. Import the other key file to complete the pair.");
+      appendLogLine("info", `keys: loaded ${kind}.keys into this session (${imported.entryCount} entries)`);
+    } catch (error) {
+      setKeyImportStatus((error as Error).message);
+      appendLogLine("error", `keys: ${kind}.keys import failed: ${(error as Error).message}`);
+    } finally {
+      if (kind === "prod" && prodKeyPicker) prodKeyPicker.value = "";
+      if (kind === "title" && titleKeyPicker) titleKeyPicker.value = "";
+    }
+  }
+
+  function clearKeyFile(kind: "prod" | "title"): void {
+    if (kind === "prod") setProdKeyFile(null);
+    else setTitleKeyFile(null);
+    setKeyImportStatus("Key file cleared from this session.");
+  }
 
   async function importFirmware(files: FileList | null): Promise<void> {
     if (!files?.length || firmwareBusy()) return;
@@ -268,7 +325,27 @@ function App(props: AppProps) {
       )}
 
       {page() === "settings" && (
-        <main class="voland-page"><div class="voland-page-heading"><div><p class="voland-eyebrow">CONSOLE CONFIGURATION</p><h1>Settings</h1><p>Runtime information and locally stored system files.</p></div></div><div class="voland-settings-grid"><div class="voland-setting-card"><span>PROCESSOR</span><strong>{props.cpuBackend}</strong><small>Active guest CPU backend</small></div><div class="voland-setting-card"><span>GRAPHICS</span><strong>{props.adapterLabel}</strong><small>Active WebGPU adapter</small></div><div class="voland-setting-card"><span>GUEST RAM CAPACITY</span><strong>{props.guestRamMiB} MiB</strong><small>Configured guest RAM pool</small></div><div class="voland-setting-card"><span>RUNTIME</span><strong>{status()}</strong><small>Worker and emulator status</small></div></div><section class="voland-memory-monitor"><div class="voland-panel-heading"><h2>Memory monitor</h2><span>LIVE · 1 SEC</span></div><p class="voland-memory-description">Exact guest page-allocator counters, plus the size of Voland’s shared WebAssembly memory. This is not a measurement of total Chrome OS memory.</p><div class="voland-memory-grid"><div class="voland-memory-card"><span>GUEST RAM IN USE</span><strong>{memoryStats() ? formatBytes(memoryStats()!.allocatedBytes) : "Waiting…"}</strong></div><div class="voland-memory-card"><span>GUEST RAM AVAILABLE</span><strong>{memoryStats() ? formatBytes(memoryStats()!.freeBytes) : "Waiting…"}</strong></div><div class="voland-memory-card"><span>PEAK GUEST USAGE</span><strong>{memoryStats() ? formatBytes(memoryStats()!.peakBytes) : "Waiting…"}</strong></div><div class="voland-memory-card"><span>WASM MEMORY RESERVED</span><strong>{memoryStats() ? formatBytes(memoryStats()!.wasmMemoryBytes) : "Waiting…"}</strong></div></div><div class="voland-memory-meter"><div><span>Guest RAM utilization</span><strong>{memoryStats() ? `${(memoryStats()!.allocatedBytes / Math.max(1, memoryStats()!.totalBytes) * 100).toFixed(1)}%` : "—"}</strong></div><div class="voland-memory-track"><div class="voland-memory-fill" style={{ width: `${memoryStats() ? Math.min(100, memoryStats()!.allocatedBytes / Math.max(1, memoryStats()!.totalBytes) * 100) : 0}%` }} /></div><small>{memoryStats() ? `${formatBytes(memoryStats()!.allocatedBytes)} of ${formatBytes(memoryStats()!.totalBytes)} guest RAM` : "Waiting for CPU worker telemetry"}</small></div></section><section class="voland-system-panel"><div class="voland-panel-heading"><h2>System firmware</h2><span>{firmwareInfo() ? "STORED LOCALLY" : "NOT INSTALLED"}</span></div><p class="voland-system-copy">Import a firmware folder dumped from your own Switch. Voland stores the files in this browser's private local storage; nothing is sent to our servers or GitHub.</p><input ref={(el) => { firmwarePicker = el; el.setAttribute("webkitdirectory", ""); el.setAttribute("directory", ""); }} class="voland-hidden-input" type="file" multiple onChange={(event) => void importFirmware(event.currentTarget.files)} /><div class="voland-system-actions"><button class="voland-primary-button" type="button" disabled={firmwareBusy()} onClick={() => firmwarePicker?.click()}>{firmwareBusy() ? "IMPORTING…" : "＋ IMPORT FIRMWARE FOLDER"}</button>{firmwareInfo() && <button class="voland-secondary-button" type="button" disabled={firmwareBusy()} onClick={() => void clearFirmware()}>CLEAR LOCAL FILES</button>}</div><p class="voland-system-status">{firmwareStatus()}</p>{firmwareInfo() && <div class="voland-firmware-stats"><span><strong>{firmwareInfo()!.fileCount}</strong> files</span><span><strong>{formatBytes(firmwareInfo()!.totalBytes)}</strong> stored</span><span>Imported {new Date(firmwareInfo()!.importedAt).toLocaleString()}</span></div>}<div class="voland-key-note"><strong>About prod.keys</strong><p>Voland does not import or use prod.keys and does not decrypt encrypted NSP/XCI files. Use your own tools to prepare pre-decrypted game files; Voland will only load supported, pre-decrypted content. Keys are never requested or uploaded.</p></div><p class="voland-settings-note">Firmware storage is implemented as a local import step. The emulator does not consume firmware yet; system-service integration is still under development.</p></section></main>
+        <main class="voland-page"><div class="voland-page-heading"><div><p class="voland-eyebrow">CONSOLE CONFIGURATION</p><h1>Settings</h1><p>Runtime information and locally stored system files.</p></div></div><div class="voland-settings-grid"><div class="voland-setting-card"><span>PROCESSOR</span><strong>{props.cpuBackend}</strong><small>Active guest CPU backend</small></div><div class="voland-setting-card"><span>GRAPHICS</span><strong>{props.adapterLabel}</strong><small>Active WebGPU adapter</small></div><div class="voland-setting-card"><span>GUEST RAM CAPACITY</span><strong>{props.guestRamMiB} MiB</strong><small>Configured guest RAM pool</small></div><div class="voland-setting-card"><span>RUNTIME</span><strong>{status()}</strong><small>Worker and emulator status</small></div></div><section class="voland-memory-monitor"><div class="voland-panel-heading"><h2>Memory monitor</h2><span>LIVE · 1 SEC</span></div><p class="voland-memory-description">Exact guest page-allocator counters, plus the size of Voland’s shared WebAssembly memory. This is not a measurement of total Chrome OS memory.</p><div class="voland-memory-grid"><div class="voland-memory-card"><span>GUEST RAM IN USE</span><strong>{memoryStats() ? formatBytes(memoryStats()!.allocatedBytes) : "Waiting…"}</strong></div><div class="voland-memory-card"><span>GUEST RAM AVAILABLE</span><strong>{memoryStats() ? formatBytes(memoryStats()!.freeBytes) : "Waiting…"}</strong></div><div class="voland-memory-card"><span>PEAK GUEST USAGE</span><strong>{memoryStats() ? formatBytes(memoryStats()!.peakBytes) : "Waiting…"}</strong></div><div class="voland-memory-card"><span>WASM MEMORY RESERVED</span><strong>{memoryStats() ? formatBytes(memoryStats()!.wasmMemoryBytes) : "Waiting…"}</strong></div></div><div class="voland-memory-meter"><div><span>Guest RAM utilization</span><strong>{memoryStats() ? `${(memoryStats()!.allocatedBytes / Math.max(1, memoryStats()!.totalBytes) * 100).toFixed(1)}%` : "—"}</strong></div><div class="voland-memory-track"><div class="voland-memory-fill" style={{ width: `${memoryStats() ? Math.min(100, memoryStats()!.allocatedBytes / Math.max(1, memoryStats()!.totalBytes) * 100) : 0}%` }} /></div><small>{memoryStats() ? `${formatBytes(memoryStats()!.allocatedBytes)} of ${formatBytes(memoryStats()!.totalBytes)} guest RAM` : "Waiting for CPU worker telemetry"}</small></div></section><section class="voland-system-panel voland-key-import-panel">
+            <div class="voland-panel-heading"><h2>Encryption keys</h2><span>{prodKeyFile() && titleKeyFile() ? "BOTH LOADED" : "KEYS REQUIRED"}</span></div>
+            <p class="voland-system-copy">Select the key files dumped from your own Switch. Both files are held in memory for this browser session only; they are not uploaded or saved to browser storage.</p>
+            <div class="voland-key-file-grid">
+              <div class="voland-key-file-card">
+                <strong>prod.keys</strong>
+                <input ref={(el) => { prodKeyPicker = el; }} class="voland-key-file-input" type="file" accept=".keys,.txt" onChange={(event) => void importKeyFile("prod", event.currentTarget.files?.[0])} />
+                <span>{prodKeyFile() ? `${prodKeyFile()!.name} · ${prodKeyFile()!.entryCount} entries · ${formatBytes(prodKeyFile()!.byteLength)}` : "Not loaded"}</span>
+                <div class="voland-key-actions"><button class="voland-secondary-button" type="button" onClick={() => prodKeyPicker?.click()}>SELECT FILE</button>{prodKeyFile() && <button class="voland-secondary-button" type="button" onClick={() => clearKeyFile("prod")}>CLEAR</button>}</div>
+              </div>
+              <div class="voland-key-file-card">
+                <strong>title.keys</strong>
+                <input ref={(el) => { titleKeyPicker = el; }} class="voland-key-file-input" type="file" accept=".keys,.txt" onChange={(event) => void importKeyFile("title", event.currentTarget.files?.[0])} />
+                <span>{titleKeyFile() ? `${titleKeyFile()!.name} · ${titleKeyFile()!.entryCount} entries · ${formatBytes(titleKeyFile()!.byteLength)}` : "Not loaded"}</span>
+                <div class="voland-key-actions"><button class="voland-secondary-button" type="button" onClick={() => titleKeyPicker?.click()}>SELECT FILE</button>{titleKeyFile() && <button class="voland-secondary-button" type="button" onClick={() => clearKeyFile("title")}>CLEAR</button>}</div>
+              </div>
+            </div>
+            <p class="voland-system-status" role="status">{keyImportStatus()}</p>
+            <p class="voland-settings-note">This first step checks the text-file structure only. It does not verify cryptographic keys or enable encrypted NSP/XCI loading yet. Homebrew NRO demos remain usable without keys.</p>
+          </section>
+          <section class="voland-system-panel"><div class="voland-panel-heading"><h2>System firmware</h2><span>{firmwareInfo() ? "STORED LOCALLY" : "NOT INSTALLED"}</span></div><p class="voland-system-copy">Import a firmware folder dumped from your own Switch. Voland stores the files in this browser's private local storage; nothing is sent to our servers or GitHub.</p><input ref={(el) => { firmwarePicker = el; el.setAttribute("webkitdirectory", ""); el.setAttribute("directory", ""); }} class="voland-hidden-input" type="file" multiple onChange={(event) => void importFirmware(event.currentTarget.files)} /><div class="voland-system-actions"><button class="voland-primary-button" type="button" disabled={firmwareBusy()} onClick={() => firmwarePicker?.click()}>{firmwareBusy() ? "IMPORTING…" : "＋ IMPORT FIRMWARE FOLDER"}</button>{firmwareInfo() && <button class="voland-secondary-button" type="button" disabled={firmwareBusy()} onClick={() => void clearFirmware()}>CLEAR LOCAL FILES</button>}</div><p class="voland-system-status">{firmwareStatus()}</p>{firmwareInfo() && <div class="voland-firmware-stats"><span><strong>{firmwareInfo()!.fileCount}</strong> files</span><span><strong>{formatBytes(firmwareInfo()!.totalBytes)}</strong> stored</span><span>Imported {new Date(firmwareInfo()!.importedAt).toLocaleString()}</span></div>}<p class="voland-settings-note">Firmware storage is implemented as a local import step. The emulator does not consume firmware yet; system-service integration is still under development.</p></section></main>
       )}
     </div>
   );

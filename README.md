@@ -20,9 +20,9 @@ Native apps on iOS, Android, macOS, tvOS, Windows, Linux, and Xbox share the sam
 
 ## Requirements
 
-To use content with Voland, you must provide your own legally obtained, **pre-decrypted NCA files**. This includes game content and, when working toward system boot, system-software/firmware content dumped from hardware you own. Prepare/decrypt content outside Voland with separate tools before importing it.
+The target workflow is to let you provide your own `prod.keys`, `title.keys`, and supported game dumps from hardware you own. Voland is being updated to process supported encrypted game containers locally. **This support is not complete yet:** until the key-import and encrypted-content milestones land, use the currently supported pre-decrypted NCA input path described in the [dumping guide](docs/DUMP.md).
 
-Voland does not distribute firmware, keys, encrypted NSP/XCI files, or game content. It does not read `prod.keys`, derive Nintendo keys, decrypt content, or connect to Nintendo services. Keys and encrypted source dumps stay outside Voland; only supported pre-decrypted NCA files are passed to its loader. See the [dumping guide](docs/DUMP.md) for the project's input boundary.
+Voland will not distribute keys, firmware, or game files, upload user content, or connect to Nintendo services. Key material and game contents are intended to remain on your device. See [DESIGN.md §1.7](docs/DESIGN.md#17-user-provided-keys-and-encrypted-game-inputs) for the new architecture and delivery sequence.
 
 ---
 
@@ -194,7 +194,7 @@ Note: dynarmic is archived and no longer builds cleanly on GCC 14 without patchi
 
 Voland is open source software released under the [GPL-2.0 license](LICENSE).
 
-Voland does not include, distribute, or facilitate obtaining Nintendo's copyrighted material. Game files must be dumped and decrypted by the user, with separate tools, from hardware they own; Voland accepts only the resulting decrypted NCA files and never consumes keys or firmware (see [DESIGN.md §1.6](docs/DESIGN.md#16-legal-scope-boundaries)). Forks or distributions that bundle Nintendo's IP are not affiliated with this project and are solely responsible for their own legal compliance.
+Voland does not include or distribute keys, firmware, or game files. The planned encrypted-input workflow processes only files selected by the user and keeps key material and game contents local; see [DESIGN.md §1.7](docs/DESIGN.md#17-user-provided-keys-and-encrypted-game-inputs). Users are responsible for ensuring their use complies with applicable law. This project does not provide legal advice.
 
 Voland is not affiliated with Nintendo Co., Ltd.
 
