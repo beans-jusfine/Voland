@@ -114,7 +114,7 @@ Voland's design avoids functionality that has been the subject of recent emulato
 
 ### No decryption of Nintendo-encrypted content
 
-Voland accepts only **pre-decrypted** game files. Users decrypt NSP/XCI files using separate tools (hactool, nxdumptool, or equivalent) before providing files to Voland. The Voland codebase does not contain NCA decryption logic, does not consume Nintendo's prod.keys for decryption, and does not implement Nintendo's key-derivation scheme.
+Voland accepts only **user-supplied, pre-decrypted NCA files**. This input boundary applies equally to game content and system-software/firmware content: a user may provide NCA files dumped from hardware they own, but Voland never bundles or distributes firmware. Users prepare/decrypt NSP/XCI or other encrypted source dumps outside Voland with separate tools before providing supported NCA files. The Voland codebase does not contain NCA decryption logic, does not consume Nintendo's `prod.keys` for decryption, and does not implement Nintendo's key-derivation scheme. Keys and encrypted source dumps remain outside Voland.
 
 **Why:** Section 1201 of the DMCA prohibits software that circumvents technological measures controlling access to copyrighted works, regardless of whether the user provides their own keys, regardless of the project being non-commercial, regardless of the user owning the games. This is the legal theory that:
 
