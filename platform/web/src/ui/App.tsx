@@ -4,6 +4,7 @@
 import { For, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import type { LogEntry } from "../log";
 import { parseKeyFile } from "../keys";
+import { inspectGamePackage, type PackageInventory } from "../packages";
 import { appendLogLine, getFps, getLogHistory, getMemoryStats, getStatus, subscribeFps, subscribeLogs, subscribeMemoryStats, subscribeStatus } from "../log";
 
 interface AppProps {
@@ -139,9 +140,14 @@ function App(props: AppProps) {
   const [prodKeyFile, setProdKeyFile] = createSignal<ImportedKeyFile | null>(null);
   const [titleKeyFile, setTitleKeyFile] = createSignal<ImportedKeyFile | null>(null);
   const [keyImportStatus, setKeyImportStatus] = createSignal("No key files loaded. Encrypted game loading is not available yet.");
+  const [packageInfo, setPackageInfo] = createSignal<PackageInventory | null>(null);
+  const [packageName, setPackageName] = createSignal("");
+  const [packageStatus, setPackageStatus] = createSignal("Select an NSP or XCI dump to inspect its contents locally.");
+  const [packageBusy, setPackageBusy] = createSignal(false);
   let firmwarePicker: HTMLInputElement | undefined;
   let prodKeyPicker: HTMLInputElement | undefined;
   let titleKeyPicker: HTMLInputElement | undefined;
+  let packagePicker: HTMLInputElement | undefined;
 
   onMount(() => {
     const offLogs = subscribeLogs((entry) => {
@@ -203,6 +209,26 @@ function App(props: AppProps) {
     } finally {
       if (kind === "prod" && prodKeyPicker) prodKeyPicker.value = "";
       if (kind === "title" && titleKeyPicker) titleKeyPicker.value = "";
+    }
+  }
+
+  async function inspectPackageFile(file: File | undefined): Promise<void> {
+    if (!file || packageBusy()) return;
+    setPackageBusy(true);
+    setPackageInfo(null);
+    setPackageName(file.name);
+    setPackageStatus("Reading package headers and file tables…");
+    try {
+      const inventory = await inspectGamePackage(file, file.name);
+      setPackageInfo(inventory);
+      setPackageStatus(`Inspected ${inventory.entries.length} entries. Package contents remain in the selected file; nothing was uploaded or copied.`);
+      appendLogLine("info", `package: inspected ${file.name} (${inventory.format}, ${inventory.ncaCount} NCA entries)`);
+    } catch (error) {
+      setPackageStatus((error as Error).message);
+      appendLogLine("error", `package inspection failed: ${(error as Error).message}`);
+    } finally {
+      setPackageBusy(false);
+      if (packagePicker) packagePicker.value = "";
     }
   }
 
@@ -297,9 +323,22 @@ function App(props: AppProps) {
 
       {page() === "library" && (
         <main class="voland-page">
-          <div class="voland-page-heading"><div><p class="voland-eyebrow">YOUR COLLECTION</p><h1>Game Library</h1><p>Launch built-in demos or load your own homebrew.</p></div><button class="voland-primary-button" onClick={() => setPage("emulator")}>＋ LOAD NRO</button></div>
+          <div class="voland-page-heading"><div><p class="voland-eyebrow">YOUR COLLECTION</p><h1>Game Library</h1><p>Launch built-in demos, load homebrew, or inspect your own NSP/XCI dump.</p></div><button class="voland-primary-button" onClick={() => setPage("emulator")}>＋ LOAD NRO</button></div>
           <div class="voland-library-grid"><For each={demos}>{(demo) => <button class="voland-library-card" disabled={!!launching()} onClick={() => void launchDemo(demo.file)}><span class={`voland-library-art art-${demo.art}`}><b>{demo.art === "bounce" ? "□" : demo.art === "calibration" ? "◉" : demo.art === "particles" ? "✳" : "▧"}</b><small>{demo.tag}</small></span><strong>{demo.name}</strong><span>{launching() === demo.file ? "Starting…" : demo.detail}</span></button>}</For></div>
           <div class="voland-empty-library"><span>＋</span><div><strong>Have your own homebrew?</strong><p>Open the emulator page to load an .nro file from your device.</p></div><button class="voland-secondary-button" onClick={() => setPage("emulator")}>OPEN LOADER</button></div>
+          <section class="voland-system-panel">
+            <div class="voland-panel-heading"><h2>Switch game package inspector</h2><span>NSP · XCI</span></div>
+            <p class="voland-system-copy">Select a game dump from your own Switch. Voland reads only the package headers and file tables to list contained files; it does not upload, extract, or decrypt the game.</p>
+            <input ref={(el) => { packagePicker = el; }} class="voland-hidden-input" type="file" accept=".nsp,.xci,application/octet-stream" onChange={(event) => void inspectPackageFile(event.currentTarget.files?.[0])} />
+            <div class="voland-system-actions"><button class="voland-primary-button" type="button" disabled={packageBusy()} onClick={() => packagePicker?.click()}>{packageBusy() ? "INSPECTING…" : "＋ SELECT NSP / XCI"}</button>{packageInfo() && <button class="voland-secondary-button" type="button" onClick={() => { setPackageInfo(null); setPackageName(""); setPackageStatus("Package selection cleared."); }}>CLEAR</button>}</div>
+            <p class="voland-system-status" role="status">{packageStatus()}</p>
+            {packageInfo() && <>
+              <div class="voland-firmware-stats"><span><strong>{packageInfo()!.format}</strong> format</span><span><strong>{packageInfo()!.entries.length}</strong> files</span><span><strong>{packageInfo()!.ncaCount}</strong> NCA files</span><span><strong>{formatBytes(packageInfo()!.totalEntryBytes)}</strong> indexed</span></div>
+              <p class="voland-settings-note">Selected: {packageName()}. Showing up to 20 entries from this package.</p>
+              <div class="voland-log-scroll">{packageInfo()!.entries.slice(0, 20).map((entry) => <p class="log-line">{entry.path} · {formatBytes(entry.size)} · {entry.kind.toUpperCase()}</p>)}</div>
+              <p class="voland-settings-note">This milestone is package inspection only. Encrypted NCA processing, title metadata, and launching a game are separate upcoming steps.</p>
+            </>}
+          </section>
         </main>
       )}
 
