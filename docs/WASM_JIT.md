@@ -2,7 +2,7 @@
 
 Design specification for Voland's web JIT. It is the companion to [DESIGN.md](DESIGN.md) §10–§11, the way `GPU_COMMAND_STREAM.md` is to §13.
 
-> **Status:** design v1 (October 2026), written ahead of implementation. `wasm_jit` is a Phase 5 deliverable (DESIGN.md §25). No `wasm_jit` code lands before Phase 5 opens, and every interface sketched in J15 goes through header review first (CLAUDE.md, "Interface headers gate implementation"). One part lands earlier: the A64 decoder and its record format (J3) arrive with the Phase 2 interpreter, which is why this document fixes their requirements now.
+> **Status:** `wasm_jit` remains a Phase 5 deliverable (DESIGN.md §25); no JIT implementation lands before Phase 5. The Phase 2 shared A64 decoder foundation and 16-byte record ABI are now implemented for the initial interpreter subset. Full ISA coverage, complete record-only interpreter execution and differential fuzzing remain open. J15 interfaces still go through header review before implementation.
 >
 > **Precedence:** DESIGN.md is authoritative. A disagreement between the two documents is a bug in one of them, and the fix updates both in the same PR.
 >
@@ -93,7 +93,7 @@ The three WASM-side layers (assembler, module builder, translator) keep the 2026
 
 ## J3. The IR: predecoded A64 records
 
-**Decision.** `wasm_jit`'s IR is the record format the predecoded interpreter executes: one fixed-size record per guest instruction, produced by the shared generated decoder, plus a static per-form metadata table. Regions (J4) are graphs of blocks of these records. There is no SSA, no micro-op layer, and no register allocator.
+**Decision.** `wasm_jit`'s IR is the shared A64 record format: one fixed-size record per decoded guest instruction, produced by the generated decoder, plus a static metadata table indexed by operation ID. Regions (J4) are graphs of blocks of these records. There is no SSA, no micro-op layer, and no register allocator.
 
 **Why this, and not a compiler IR:**
 
@@ -104,36 +104,36 @@ The three WASM-side layers (assembler, module builder, translator) keep the 2026
 
 This reconciles the two positions recorded on the Ballistic decision. "No IR is required for WASM" holds for a generic compiler IR. "Decoder shared with the interpreter → small Voland IR → WASM emitter" holds for this one. The rejected alternatives are in J18.
 
-**Record (sketch; header review with the Phase 2 decoder):**
+**Record (implemented ABI, core/cpu/a64/insn.h):**
 
 ```c
-/* core/cpu/a64/insn.h — proposal */
 typedef struct A64_Insn {
-  uint16_t op;      /* A64_Op: one value per instruction form, e.g. A64_OP_ADD_IMM_X */
-  uint8_t  rd, rn;  /* raw 5-bit register fields; what 31 means is in A64_Op_Info */
-  uint8_t  rm, ra;
-  uint16_t aux;     /* small form-specific fields: shift type/amount, extend,
-                       condition, size; layout defined per form */
-  uint64_t imm;     /* decoded immediate: bitmask immediates expanded, branch
-                       offsets sign-extended, shifted forms pre-shifted */
-} A64_Insn;         /* 16 bytes: four records per 64-byte cache line */
+    uint16_t op;       /* A64_Op operation ID */
+    uint8_t rd, rn;
+    uint8_t rm, ra;
+    uint16_t aux;      /* is64, size, link, shift, cond, hw, NZCV */
+    uint64_t imm;      /* normalized immediate; details below */
+} A64_Insn;            /* exactly 16 bytes */
 ```
 
+The aux bit layout is fixed in insn.h: bit 0 is sf; bits 1–2 are memory size log2; bit 3 is B/BL link; bits 4–5 are shift type; bits 6–9 are condition; bits 10–11 are move-wide hw; bits 12–15 are CCMN's immediate NZCV. imm holds signed byte displacements for B/BL, B.cond and CBZ/CBNZ; signed byte offsets for ADR/ADRP; pre-shifted move-wide and ADD/SUB immediates; byte-scaled unsigned LDR/STR offsets; packed immr:imms for SBFM/UBFM; and immediate/shift fields for other supported forms.
+
+PC-relative fields stay offsets, never absolute addresses, so records are position-independent. The translation cache depends on that (J5.5, J10).
 PC-relative fields stay offsets, never absolute addresses, so records are position-independent. The translation cache depends on that (J5.5, J10).
 
-**Per-form metadata** (a generated `const` table indexed by `op`):
+**Operation metadata** (a generated `const` table indexed by `A64_Op`):
 
 | Field | Meaning | Used by |
 |---|---|---|
 | `gpr_reads`, `gpr_writes` | which of rd/rn/rm/ra are sources and destinations, and for each whether 31 means SP or XZR | register caching (J7.1) |
 | `flags_read`, `flags_written` | NZCV masks | lazy flags (J7.2) |
 | `vreg_reads`, `vreg_writes` | V-register fields | FP/SIMD caching (J7.8) |
-| `mem` | none, load, store, or load+store (exclusive); access size; element count; alignment requirement | softmmu lowering (J7.3), precise faults |
+| `mem_kind`, `mem_size`, `mem_count`, `mem_alignment` | none/load/store/load+store; byte size; element count; alignment. In the initial subset, `mem_size=0` means the concrete size is carried in `aux` (bits 1–2); normal integer loads/stores require byte alignment. | softmmu lowering (J7.3), precise faults |
 | `kind` | sequential, direct branch, conditional branch, call (BL), indirect, SVC, exception (BRK/UDF), system, barrier | block and region formation (J4) |
 | `fp_mode_dependent` | the result depends on FPCR's mode bits | region specialization (J4.5) |
 | `jit_tier` | 0 = interpreter only; 1 = translated by tier 1; and so on | coverage fallback (J4.6) |
 
-**Requirement on the Phase 2 decoder**, fixed now so Phase 5 does not inherit a rewrite: it produces `A64_Insn` records with this metadata. Its generator works from ARM's machine-readable A64 specification (DESIGN.md §10); the license check is J17 question 2.
+**Phase 2 implementation snapshot (2026-11-09).** The generator is pinned to Arm AARCHMRS 2026-09_rel, schema 2.9.6; the exact upstream docs/notice.html is retained beside the compressed A64 subset and states BSD 3-Clause terms. The subset contains 76 concrete encodings across 42 operation IDs corresponding to the interpreter's initial supported families. The generator validates the pinned version, rejects overlapping patterns, emits the operation enum and decoder at build time, and has a reproducibility check. The operation metadata is family-level for this initial subset; where a family has variable memory size, the concrete size is in aux. Every current operation has jit_tier=0 until a translator actually covers it. The interpreter now gates and dispatches supported forms using generated operation IDs and consumes normalized branch/immediate fields; some operation-specific operand extraction remains in the semantic handlers. Full A64 coverage, complete record-only execution and Unicorn differential fuzzing are still outstanding.
 
 ---
 
@@ -769,7 +769,7 @@ Bisectable; every step lands with its tests.
 
 | Step | Phase | Lands |
 |---|---|---|
-| 1 | 2 | A64 decoder generator, `A64_Insn` + metadata, used by the interpreter; interpreter fuzzing against an external reference |
+| 1 | 2 | Pinned A64 decoder generator, 16-byte `A64_Insn` + operation metadata, initial forms wired into interpreter dispatch; complete operand-record migration and external-reference fuzzing remain Phase 2 follow-ups |
 | 2 | 5 | `A64_State` control block; dispatcher and block cache; the predecoded interpreter on top of them (the execution path on web and desktop) |
 | 3 | 5 | WASM assembler (golden-byte tests) |
 | 4 | 5 | module builder and relocations (Node validation tests) |
@@ -788,7 +788,7 @@ Bisectable; every step lands with its tests.
 Decisions this document does not make, each with a recommendation where there is one. A question the maintainer has since decided stays in place, so its number stays valid, marked with its decision; J18 logs it.
 
 1. **Crypto Extension instructions vs. the `aes` tripwire.** *Decided 2026-10-28, as recommended (J18).* The A57 implements AESE/AESD/AESMC/AESIMC, SHA1\*/SHA256\* and PMULL, and games use them through the SDK for their own purposes. Implementing them is CPU semantics, not decryption of Nintendo content: they are operations of the guest program, like an XOR, and nothing in Voland's loader path uses them. The review tripwire (`grep -rin "aes\|decrypt"`) flags them, and hard rule 1 was the maintainer's to interpret. Only the four AES forms match; SHA, PMULL and CRC32 do not. They hit wherever their names appear: the generated decoder and metadata tables in `core/cpu/a64/`, and the semantics file. Tier 1 as specified adds no hits: J7.9 gives these forms no helper, so they run on the interpreter (`jit_tier` 0, J4.6), and a later helper would add its own. *Decision:* implement them as plain architectural semantics, shared by both backends, in one clearly named file. DESIGN.md §1.6 records why this is not decryption, and CONTRIBUTING.md lists hits under `core/cpu/` that name or implement the four AES forms as a standing tripwire exception, next to `arena.c`'s `malloc`. Titles that use them would fault otherwise. The first implementation is the Phase 2 interpreter's.
-2. **License of ARM's machine-readable specification**, which generates the decoder (J3). Check the terms of the exact release used before committing generated tables.
+2. **License of ARM's machine-readable specification**, which generates the decoder (J3). *Resolved 2026-11-09 (J18):* the pinned AARCHMRS 2026-09_rel release notice states BSD 3-Clause. Voland retains that exact notice and checks in only the selected A64 encoding subset; any release bump requires a fresh notice review.
 3. **Emscripten's table under wasm64.** *Resolved by DESIGN.md v3.29:* the core is wasm32, so `__indirect_function_table` is 32-bit-indexed, `call_indirect` takes an `i32`, and JS passes a Number to `table.set`. Only the table-growth flag's spelling remains to verify on Emscripten 6.0.9+ (DESIGN.md §24).
 4. **Defaults** for `WASM_JIT_HOT_THRESHOLD`, batch size, in-flight limit and slot capacity, to be set by Phase 5 measurement.
 5. **Relaxed-SIMD FMA** (J11): gather the evidence, or keep exact emulation permanently?
@@ -819,6 +819,7 @@ Decisions this document does not make, each with a recommendation where there is
 
 | Decision | Rejected alternative | Why |
 |---|---|---|
+| Pinned AARCHMRS 2026-09_rel A64 encoding subset under BSD 3-Clause; deterministic build-time generator (J3, J17 question 2) | handwritten decoder masks; unpinned external download at build time | Source provenance and license are fixed; generated patterns are reproducible and shared by interpreter/JIT |
 | Voland-owned JIT | Ballistic-WASM; a Ballistic fork | DESIGN.md §10 |
 | Predecoded records as the IR (J3) | SSA micro-op IR; decoding straight to WASM with no shared form | The browser optimizes generic code; ARM-aware optimizations need only per-instruction facts; one decoder serves the interpreter and the JIT |
 | One function per region: `loop` + `br_table`, forward edges as `br` | one function per block linked by calls; per-block functions linked by tail calls | Calls grow the stack on every guest loop iteration; tail calls force a register spill per block (DESIGN.md §11) |

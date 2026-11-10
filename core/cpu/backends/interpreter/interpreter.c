@@ -8,6 +8,7 @@
  * exceptions beyond SVC, and many integer encodings remain TODO.
  */
 #include "cpu/cpu.h"
+#include "cpu/a64/decoder.h"
 #include "common/vmm.h"
 #include "common/log.h"
 
@@ -120,58 +121,58 @@ static bool execute_one(InterpreterState *s) {
     s->fault_address=fault.gva; return false;
   }
   s->regs.pc=pc+4u;
+  A64_Insn decoded;
+  if (!a64_decode(insn, &decoded)) goto undefined;
 
   /* NOP */
-  if (insn==0xd503201fu) return true;
+  if (decoded.op == A64_OP_HINT && insn == 0xd503201fu) return true;
 
   /* SVC #imm16 */
-  if ((insn & 0xffe0001fu)==0xd4000001u) {
+  if (decoded.op == A64_OP_SVC) {
     s->svc_seen=true;
-    if (s->svc_handler) s->svc_handler((CPU_State *)s,(insn>>5)&0xffffu,s->userdata);
+    if (s->svc_handler) s->svc_handler((CPU_State *)s,(uint32_t)decoded.imm,s->userdata);
     return true;
   }
 
   /* B / BL */
-  if ((insn & 0x7c000000u)==0x14000000u) {
-    if (insn & 0x80000000u) s->regs.x[30]=pc+4u;
-    s->regs.pc=pc+sign_extend(insn&0x03ffffffu,26)*4u;
+  if (decoded.op == A64_OP_B_UNCOND) {
+    if ((decoded.aux & A64_AUX_LINK) != 0u) s->regs.x[30]=pc+4u;
+    s->regs.pc=pc+decoded.imm;
     return true;
   }
 
   /* B.cond */
-  if ((insn & 0xff000010u)==0x54000000u) {
-    if (condition_passed(s->regs.pstate,insn&15u))
-      s->regs.pc=pc+sign_extend((insn>>5)&0x7ffffu,19)*4u;
+  if (decoded.op == A64_OP_B_COND) {
+    if (condition_passed(s->regs.pstate,(decoded.aux >> A64_AUX_COND_SHIFT)&15u))
+      s->regs.pc=pc+decoded.imm;
     return true;
   }
 
   /* CBZ / CBNZ */
-  if ((insn & 0x7e000000u)==0x34000000u) {
-    const bool is64=(insn>>31)!=0, nonzero=((insn>>24)&1u)!=0;
-    const uint64_t value=read_reg(s,insn&31u,is64,false);
-    if ((value!=0)==nonzero)
-      s->regs.pc=pc+sign_extend((insn>>5)&0x7ffffu,19)*4u;
+  if (decoded.op == A64_OP_CBZ || decoded.op == A64_OP_CBNZ) {
+    const bool is64=(decoded.aux & A64_AUX_IS_64)!=0u, nonzero=decoded.op==A64_OP_CBNZ;
+    const uint64_t value=read_reg(s,decoded.rd,is64,false);
+    if ((value!=0)==nonzero) s->regs.pc=pc+decoded.imm;
     return true;
   }
 
   /* RET / BR */
-  if ((insn & 0xfffffc1fu)==0xd65f0000u ||
-      (insn & 0xfffffc1fu)==0xd61f0000u) {
+  if (decoded.op == A64_OP_RET || decoded.op == A64_OP_BR) {
     s->regs.pc=read_reg(s,(insn>>5)&31u,true,false);
     return true;
   }
 
   /* ADR / ADRP */
-  if ((insn & 0x1f000000u)==0x10000000u) {
-    const uint64_t imm=((uint64_t)((insn>>5)&0x7ffffu)<<2)|((insn>>29)&3u);
-    const uint64_t offset=sign_extend(imm,21);
-    const uint64_t base=(insn&(1u<<31)) ? (pc&~UINT64_C(0xfff)) : pc;
-    write_reg(s,insn&31u,base+((insn&(1u<<31))?offset<<12:offset),true,false);
+  if (decoded.op == A64_OP_ADR || decoded.op == A64_OP_ADRP) {
+    const uint64_t offset=decoded.imm;
+    const bool page_relative=decoded.op==A64_OP_ADRP;
+    const uint64_t base=page_relative ? (pc&~UINT64_C(0xfff)) : pc;
+    write_reg(s,decoded.rd,base+(page_relative?offset<<12:offset),true,false);
     return true;
   }
 
   /* MOVN / MOVZ / MOVK (wide immediate). */
-  if ((insn & 0x1f800000u)==0x12800000u) {
+  if (decoded.op == A64_OP_MOVN || decoded.op == A64_OP_MOVZ || decoded.op == A64_OP_MOVK) {
     const bool is64=(insn>>31)!=0;
     const unsigned opc=(insn>>29)&3u, shift=((insn>>21)&3u)*16u, rd=insn&31u;
     if (opc==1u || shift>= (is64?64u:32u)) goto undefined;
@@ -184,7 +185,7 @@ static bool execute_one(InterpreterState *s) {
   }
 
   /* MADD / MSUB: multiply two registers and add/subtract an accumulator. */
-  if ((insn & 0x1fe00000u)==0x1b000000u) {
+  if (decoded.op == A64_OP_MADD || decoded.op == A64_OP_MSUB) {
     const bool is64=(insn>>31)!=0, subtract=((insn>>15)&1u)!=0;
     const unsigned rm=(insn>>16)&31u, ra=(insn>>10)&31u;
     const unsigned rn=(insn>>5)&31u, rd=insn&31u;
@@ -199,8 +200,7 @@ static bool execute_one(InterpreterState *s) {
 
   /* UDIV / SDIV: divide Rn by Rm. A zero divisor produces zero;
    * signed minimum divided by -1 preserves the minimum value. */
-  if ((insn & 0x7fe0fc00u)==0x1ac00800u ||
-      (insn & 0x7fe0fc00u)==0x1ac00c00u) {
+  if (decoded.op == A64_OP_UDIV || decoded.op == A64_OP_SDIV) {
     const bool is64=(insn>>31)!=0;
     const bool is_signed=(insn & 0x00000400u)!=0;
     const unsigned rm=(insn>>16)&31u, rn=(insn>>5)&31u, rd=insn&31u;
@@ -230,7 +230,7 @@ static bool execute_one(InterpreterState *s) {
 
   /* CCMN (register): conditionally add Rn and Rm and update NZCV;
    * when the condition fails, load the immediate NZCV field instead. */
-  if ((insn & 0x7fe00c10u)==0x3a400800u) {
+  if (decoded.op == A64_OP_CCMN_REG) {
     const bool is64=(insn>>31)!=0;
     const unsigned cond=(insn>>12)&15u;
     const unsigned rm=(insn>>16)&31u, rn=(insn>>5)&31u;
@@ -247,7 +247,7 @@ static bool execute_one(InterpreterState *s) {
 
   /* CSEL / CSINC / CSINV / CSNEG: select Rn when the condition
    * holds; otherwise select Rm, optionally incremented, inverted, or negated. */
-  if ((insn & 0x3fe00800u)==0x1a800000u) {
+  if (decoded.op == A64_OP_CSEL || decoded.op == A64_OP_CSINC || decoded.op == A64_OP_CSINV || decoded.op == A64_OP_CSNEG) {
     const bool is64=(insn>>31)!=0;
     const bool invert=((insn>>30)&1u)!=0;
     const bool transform=((insn>>10)&1u)!=0;
@@ -267,7 +267,7 @@ static bool execute_one(InterpreterState *s) {
   }
 
   /* SBFM / UBFM: rotate then extract a contiguous bitfield. */
-  if ((insn & 0x1f800000u)==0x13000000u) {
+  if (decoded.op == A64_OP_SBFM || decoded.op == A64_OP_UBFM) {
     const bool is64=(insn>>31)!=0;
     const unsigned opc=(insn>>29)&3u;
     const unsigned n=(insn>>22)&1u;
@@ -291,7 +291,7 @@ static bool execute_one(InterpreterState *s) {
   }
 
   /* ADD / SUB (immediate), including flag-setting CMP alias. */
-  if ((insn & 0x1f000000u)==0x11000000u) {
+  if (decoded.op == A64_OP_ADD_ADDSUB_IMM || decoded.op == A64_OP_SUB_ADDSUB_IMM || decoded.op == A64_OP_ADDS_ADDSUB_IMM || decoded.op == A64_OP_SUBS_ADDSUB_IMM) {
     const bool is64=(insn>>31)!=0, sub=((insn>>30)&1u)!=0, set=((insn>>29)&1u)!=0;
     const unsigned rn=(insn>>5)&31u, rd=insn&31u;
     const uint64_t imm=((uint64_t)(insn>>10)&0xfffu)<<(((insn>>22)&1u)?12u:0u);
@@ -310,7 +310,7 @@ static bool execute_one(InterpreterState *s) {
   }
 
   /* ADD / SUB (shifted register), including ADDS/SUBS and CMP aliases. */
-  if ((insn & 0x1f200000u)==0x0b000000u) {
+  if (decoded.op == A64_OP_ADD_ADDSUB_SHIFT || decoded.op == A64_OP_SUB_ADDSUB_SHIFT || decoded.op == A64_OP_ADDS_ADDSUB_SHIFT || decoded.op == A64_OP_SUBS_ADDSUB_SHIFT) {
     const bool is64=(insn>>31)!=0, sub=((insn>>30)&1u)!=0;
     const bool set=((insn>>29)&1u)!=0;
     const unsigned shift=(insn>>22)&3u, rm=(insn>>16)&31u;
@@ -332,7 +332,7 @@ static bool execute_one(InterpreterState *s) {
   }
 
   /* Logical shifted-register: AND/ORR/EOR/ANDS and inverted forms. */
-  if ((insn & 0x1f000000u)==0x0a000000u) {
+  if (decoded.op == A64_OP_AND_LOG_SHIFT || decoded.op == A64_OP_ORR_LOG_SHIFT || decoded.op == A64_OP_EOR_LOG_SHIFT || decoded.op == A64_OP_ANDS_LOG_SHIFT || decoded.op == A64_OP_BIC_LOG_SHIFT || decoded.op == A64_OP_ORN_LOG_SHIFT || decoded.op == A64_OP_EON) {
     const bool is64=(insn>>31)!=0;
     const unsigned opc=(insn>>29)&3u, shift=(insn>>22)&3u;
     const bool invert=((insn>>21)&1u)!=0;
@@ -360,11 +360,11 @@ static bool execute_one(InterpreterState *s) {
   }
 
   /* LDR/STR unsigned immediate. */
-  if ((insn & 0x3b000000u)==0x39000000u && ((insn>>22)&3u)<=1u)
+  if (decoded.op == A64_OP_LDR_IMM_GEN || decoded.op == A64_OP_STR_IMM_GEN)
     return load_store(s,insn);
 
   /* MRS Xt, TPIDRRO_EL0: expose the kernel-provided TLS pointer to guest code. */
-  if ((insn & 0xfff00000u) == 0xd5300000u) {
+  if (decoded.op == A64_OP_MRS) {
     const uint32_t sysreg = insn & 0x001fffe0u;
     const unsigned rt = insn & 31u;
     if (sysreg == CPU_SYSREG_TPIDRRO_EL0) {

@@ -1,3 +1,25 @@
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(A64_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/a64")
+
+add_custom_command(
+  OUTPUT
+    "${A64_GENERATED_DIR}/decoder_generated.c"
+    "${A64_GENERATED_DIR}/a64_decoder_vectors_generated.h"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${A64_GENERATED_DIR}"
+  COMMAND ${Python3_EXECUTABLE}
+          "${PROJECT_SOURCE_DIR}/tools/a64/generate_decoder.py"
+          --output-dir "${A64_GENERATED_DIR}"
+  DEPENDS
+    "${PROJECT_SOURCE_DIR}/tools/a64/generate_decoder.py"
+    "${PROJECT_SOURCE_DIR}/tools/a64/generate_decoder_impl.py.gz"
+    "${PROJECT_SOURCE_DIR}/core/cpu/a64/spec/AARCHMRS-2026-09-A64-supported.json.gz"
+  VERBATIM
+)
+add_custom_target(voland_a64_decoder_generated DEPENDS
+  "${A64_GENERATED_DIR}/decoder_generated.c"
+  "${A64_GENERATED_DIR}/a64_decoder_vectors_generated.h"
+)
+
 # Builds the platform-agnostic C11 emulator core. See docs/DESIGN.md section 2.
 
 set(SWITCH_CORE_SOURCES
@@ -7,6 +29,7 @@ set(SWITCH_CORE_SOURCES
   common/input_region.c
   common/vmm.c
   cpu/cpu.c
+  ${A64_GENERATED_DIR}/decoder_generated.c
   cpu/backends/noop/noop.c
   cpu/backends/interpreter/interpreter.c
   hle/hle.c
@@ -61,6 +84,8 @@ set(SWITCH_CORE_PUBLIC_HEADERS
   common/input_region.h
   common/vmm.h
   cpu/cpu.h
+  cpu/a64/insn.h
+  cpu/a64/decoder.h
   cpu/backends/noop/noop.h
   cpu/backends/interpreter/interpreter.h
   hle/hle.h
@@ -89,6 +114,7 @@ set(SWITCH_CORE_PUBLIC_HEADERS
 )
 
 add_library(switch_core STATIC ${SWITCH_CORE_SOURCES} ${SWITCH_CORE_THIRD_PARTY_SOURCES})
+add_dependencies(switch_core voland_a64_decoder_generated)
 
 # MSVC gates its C11 <stdatomic.h> implementation behind an experimental flag.
 # PUBLIC propagates it to tests and consumers that include public atomic headers.
@@ -96,6 +122,7 @@ target_compile_options(switch_core PUBLIC "$<$<C_COMPILER_ID:MSVC>:/experimental
 
 target_include_directories(switch_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+  $<BUILD_INTERFACE:${A64_GENERATED_DIR}>
 )
 
 #
