@@ -61,6 +61,13 @@ int main(void) {
   CHECK(a64_decode(UINT32_C(0x70ffffe0), &decoded)); /* ADR X0,#-1 */
   CHECK(decoded.op == A64_OP_ADR && (int64_t)decoded.imm == -1);
 
+  /* CCMN register form has bit 11 clear; bit 11 set selects the
+   * immediate form, which is not part of this interpreter subset. */
+  CHECK(a64_decode(UINT32_C(0xba411024), &decoded)); /* CCMN X1,X1,#4,NE */
+  CHECK(decoded.op == A64_OP_CCMN_REG);
+  CHECK(decoded.rn == 1u && decoded.rm == 1u);
+  CHECK(!a64_decode(UINT32_C(0xba411824), &decoded)); /* CCMN immediate */
+
   CHECK(a64_decode(UINT32_C(0xd503201f), &decoded)); /* NOP */
   CHECK(decoded.op == A64_OP_HINT);
 
