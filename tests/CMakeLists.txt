@@ -103,3 +103,8 @@ add_test(NAME svc_ipc_test COMMAND svc_ipc_test)
 add_executable(nro_execution_test nro_execution_test.c)
 target_link_libraries(nro_execution_test PRIVATE switch_core)
 add_test(NAME nro_execution_test COMMAND nro_execution_test)
+
+# Shared input-region ABI and bounded seqlock readers (§18).
+add_executable(input_region_test input_region_test.c)
+target_link_libraries(input_region_test PRIVATE switch_core)
+add_test(NAME input_region_test COMMAND input_region_test)
