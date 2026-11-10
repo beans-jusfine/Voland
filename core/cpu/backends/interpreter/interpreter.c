@@ -171,17 +171,19 @@ static bool execute_one(InterpreterState *s) {
     return true;
   }
 
-  /* MOVN / MOVZ / MOVK (wide immediate). */
-  if (decoded.op == A64_OP_MOVN || decoded.op == A64_OP_MOVZ || decoded.op == A64_OP_MOVK) {
-    const bool is64=(insn>>31)!=0;
-    const unsigned opc=(insn>>29)&3u, shift=((insn>>21)&3u)*16u, rd=insn&31u;
-    if (opc==1u || shift>= (is64?64u:32u)) goto undefined;
-    uint64_t imm=(uint64_t)((insn>>5)&0xffffu)<<shift;
-    uint64_t old=read_reg(s,rd,is64,false), value;
-    if (opc==0u) value=~imm;
-    else if (opc==2u) value=imm;
-    else value=(old & ~(UINT64_C(0xffff)<<shift)) | imm;
-    write_reg(s,rd,value,is64,false); return true;
+  /* MOVN / MOVZ / MOVK consume normalized width, destination,
+   * halfword selector, and pre-shifted immediate from the shared decoder. */
+  if (decoded.op == A64_OP_MOVN || decoded.op == A64_OP_MOVZ ||
+      decoded.op == A64_OP_MOVK) {
+    const bool is64=(decoded.aux & A64_AUX_IS_64)!=0u;
+    const unsigned shift=((decoded.aux >> A64_AUX_HW_SHIFT)&3u)*16u;
+    const uint64_t old=read_reg(s,decoded.rd,is64,false);
+    uint64_t value;
+    if (decoded.op==A64_OP_MOVN) value=~decoded.imm;
+    else if (decoded.op==A64_OP_MOVZ) value=decoded.imm;
+    else value=(old & ~(UINT64_C(0xffff)<<shift)) | decoded.imm;
+    write_reg(s,decoded.rd,value,is64,false);
+    return true;
   }
 
   /* MADD / MSUB consume normalized operands and operation ID. */
@@ -260,27 +262,24 @@ static bool execute_one(InterpreterState *s) {
     return true;
   }
 
-  /* SBFM / UBFM: rotate then extract a contiguous bitfield. */
+  /* SBFM / UBFM consume the normalized immr:imms pair and operands. */
   if (decoded.op == A64_OP_SBFM || decoded.op == A64_OP_UBFM) {
-    const bool is64=(insn>>31)!=0;
-    const unsigned opc=(insn>>29)&3u;
-    const unsigned n=(insn>>22)&1u;
+    const bool is64=(decoded.aux & A64_AUX_IS_64)!=0u;
     const unsigned width=is64?64u:32u;
-    const unsigned immr=(insn>>16)&63u, imms=(insn>>10)&63u;
-    const unsigned rn=(insn>>5)&31u, rd=insn&31u;
-    if (opc==1u || opc==3u || n!=(unsigned)is64 ||
-        immr>=width || imms>=width) goto undefined;
+    const unsigned immr=(unsigned)((decoded.imm >> 6)&63u);
+    const unsigned imms=(unsigned)(decoded.imm&63u);
+    if (immr>=width || imms>=width) goto undefined;
     const unsigned r=immr&(width-1u), sbit=imms&(width-1u);
     const unsigned field_width=((sbit-r)&(width-1u))+1u;
-    const uint64_t value=read_reg(s,rn,is64,false);
+    const uint64_t value=read_reg(s,decoded.rn,is64,false);
     const uint64_t rotated=r==0u?value:
         ((value>>r)|(value<<(width-r)));
     const uint64_t mask=field_width==width?
         (is64?UINT64_MAX:UINT32_MAX):
         ((UINT64_C(1)<<field_width)-1u);
     uint64_t result=rotated&mask;
-    if (opc==0u) result=sign_extend(result,field_width);
-    write_reg(s,rd,result,is64,false);
+    if (decoded.op==A64_OP_SBFM) result=sign_extend(result,field_width);
+    write_reg(s,decoded.rd,result,is64,false);
     return true;
   }
 

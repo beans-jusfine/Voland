@@ -29,6 +29,11 @@ int main(void) {
   CHECK(a64_decode(UINT32_C(0xd2800540), &decoded)); /* MOVZ X0,#42 */
   CHECK(decoded.op == A64_OP_MOVZ && decoded.rd == 0u && decoded.imm == 42u);
   CHECK((decoded.aux & A64_AUX_IS_64) != 0u);
+  CHECK(a64_decode(UINT32_C(0xd2a24680), &decoded)); /* MOVZ X0,#0x1234,LSL #16 */
+  CHECK(decoded.op == A64_OP_MOVZ && decoded.rd == 0u);
+  CHECK(decoded.imm == UINT64_C(0x12340000));
+  CHECK((decoded.aux & A64_AUX_IS_64) != 0u);
+  CHECK(((decoded.aux >> A64_AUX_HW_SHIFT)&3u) == 1u);
 
   CHECK(a64_decode(UINT32_C(0x91002001), &decoded)); /* ADD X1,X0,#8 */
   CHECK(decoded.op == A64_OP_ADD_ADDSUB_IMM);
@@ -91,6 +96,11 @@ int main(void) {
   CHECK(a64_decode(UINT32_C(0x93401c62), &decoded)); /* SBFM X2,X3,#0,#7 */
   CHECK(decoded.op == A64_OP_SBFM);
   CHECK(decoded.rd == 2u && decoded.rn == 3u && decoded.imm == 7u);
+  CHECK(a64_decode(UINT32_C(0xd348fc20), &decoded)); /* UBFM X0,X1,#8,#63 */
+  CHECK(decoded.op == A64_OP_UBFM);
+  CHECK(decoded.rd == 0u && decoded.rn == 1u);
+  CHECK(decoded.imm == ((UINT64_C(8)<<6)|63u));
+  CHECK((decoded.aux & A64_AUX_IS_64) != 0u);
 
   CHECK(a64_decode(UINT32_C(0xd53bd069), &decoded)); /* MRS X9,TPIDRRO_EL0 */
   CHECK(decoded.op == A64_OP_MRS && decoded.rd == 9u);

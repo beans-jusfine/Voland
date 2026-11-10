@@ -132,6 +132,20 @@ int main(void) {
   CHECK(backend->get_reg(state, 4) == UINT64_C(0xfffffffd00000004));
   CHECK(backend->get_reg(state, 5) == 16);
 
+  /* MOVZ/MOVK use normalized pre-shifted immediates; MOVN complements
+   * only within the selected 32-bit destination width. */
+  const uint32_t mov_wide_program[] = {
+    UINT32_C(0xd2a24680), /* MOVZ X0, #0x1234, LSL #16 */
+    UINT32_C(0xf2d579a0), /* MOVK X0, #0xabcd, LSL #32 */
+    UINT32_C(0x12a24681), /* MOVN W1, #0x1234, LSL #16 */
+  };
+  CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0x160, mov_wide_program, sizeof(mov_wide_program)));
+  backend->set_reg(state, 0, UINT64_C(0xffffffffffffffff));
+  backend->set_pc(state, CODE_GVA + 0x160);
+  CHECK(backend->run(state, 3) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(backend->get_reg(state, 0) == UINT64_C(0x0000abcd12340000));
+  CHECK(backend->get_reg(state, 1) == UINT64_C(0xedcbffff));
+
   /* UBFM extracts unsigned fields; SBFM sign-extends the selected field. */
   const uint32_t bitfield_program[] = {
     UINT32_C(0xd348fc20), /* UBFM X0, X1, #8, #63 (LSR #8) */
