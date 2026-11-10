@@ -161,6 +161,16 @@ async function inspectXci(file: Blob): Promise<PackageInventory> {
 
 /** Inspect an NSP/PFS0 or XCI file without loading its contents into memory. */
 export async function inspectGamePackage(file: Blob, filename = ""): Promise<PackageInventory> {
+  if (filename.toLowerCase().endsWith(".nca")) {
+    if (file.size < 0x204) {
+      fail("The selected NCA is too small to contain a complete header. Check the file and try again.");
+    }
+    const ncaMagic = await readBytes(file, 0x200, 4, "NCA header");
+    if (magic(ncaMagic, "NCA3") || magic(ncaMagic, "NCA2")) {
+      fail("This is a decrypted NCA file, not an NSP/XCI container. Select an NSP or XCI to inspect its package inventory.");
+    }
+    fail("The NCA header is encrypted or invalid. Voland currently requires pre-decrypted NCA files; prepare your own dump with separate tools first (docs/DUMP.md).");
+  }
   if (file.size < 0x10) fail("Selected package is too small to contain a valid header.");
   const prefix = await readBytes(file, 0, Math.min(file.size, 4), "package magic");
   if (magic(prefix, "PFS0")) return inspectPfs0(file);
