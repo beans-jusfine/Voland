@@ -332,6 +332,7 @@ function App(props: AppProps) {
             <input ref={(el) => { packagePicker = el; }} class="voland-hidden-input" type="file" accept=".nsp,.xci,application/octet-stream" onChange={(event) => void inspectPackageFile(event.currentTarget.files?.[0])} />
             <div class="voland-system-actions"><button class="voland-primary-button" type="button" disabled={packageBusy()} onClick={() => packagePicker?.click()}>{packageBusy() ? "INSPECTING…" : "＋ SELECT NSP / XCI"}</button>{packageInfo() && <button class="voland-secondary-button" type="button" onClick={() => { setPackageInfo(null); setPackageName(""); setPackageStatus("Package selection cleared."); }}>CLEAR</button>}</div>
             <p class="voland-system-status" role="status">{packageStatus()}</p>
+            {packageStatus().includes("docs/DUMP.md") && <a class="voland-text-button" href="https://github.com/beans-jusfine/Voland/blob/main/docs/DUMP.md" target="_blank" rel="noreferrer">OPEN DUMPING GUIDE</a>}
             {packageInfo() && <>
               <div class="voland-firmware-stats"><span><strong>{packageInfo()!.format}</strong> format</span><span><strong>{packageInfo()!.entries.length}</strong> files</span><span><strong>{packageInfo()!.ncaCount}</strong> NCA files</span><span><strong>{formatBytes(packageInfo()!.totalEntryBytes)}</strong> indexed</span></div>
               <p class="voland-settings-note">Selected: {packageName()}. Showing up to 20 entries from this package.</p>
