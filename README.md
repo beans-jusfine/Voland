@@ -4,7 +4,7 @@ A Nintendo Switch emulator targeting the web as a primary platform, with native 
 
 Play Switch games in your browser. No installation. No setup beyond providing your own keys and games.
 
-> **Status:** Early development: **Phase 1 (Load & Memory)** of [DESIGN.md §25](docs/DESIGN.md#25-development-phases). Phase 0 and most of Phase 1 have landed, including the softmmu, pre-decrypted NCA/NSO loading, CNMT metadata parsing, process bootstrap, TLS, memory SVCs, a user-supplied system-software preflight inventory, and the shared input-region seqlock. CI covers native GCC/Clang/MSVC and Emscripten/WASM. This inventory does not yet assemble a complete firmware set or boot Horizon OS; guest code execution and the genuine HOME Menu are not available yet.
+> **Status:** Early development: **Phase 2 (First Instructions)** of [DESIGN.md §25](docs/DESIGN.md#25-development-phases); Phase 1 (Load & Memory) is complete. Landed foundations include the softmmu, pre-decrypted NCA/NSO loading, CNMT metadata parsing, process bootstrap, TLS, memory SVCs, user-supplied system-content inventory, shared input seqlock, and actionable encrypted-input errors linking to the dumping guide. Phase 2 now begins with the shared generated ARM64 decoder and interpreter, followed by the NRO loader and guest scheduler. Voland still cannot boot Horizon OS or display the genuine Switch HOME Menu.
 
 ---
 

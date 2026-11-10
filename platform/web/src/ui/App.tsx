@@ -353,7 +353,15 @@ function App(props: AppProps) {
           <aside class="voland-sidebar">
             <section class="voland-panel voland-navigation-panel"><div class="voland-panel-heading"><h2>Navigation</h2><span>MENU</span></div><label class="voland-toggle"><input type="checkbox" checked={showGoHome()} onChange={(event) => setShowGoHome(event.currentTarget.checked)} /><span class="voland-toggle-track" /><span class="voland-toggle-label">{showGoHome() ? "ON" : "OFF"}</span><strong>Show “Go to HOME Menu”</strong></label>{showGoHome() && <button class="voland-home-menu-button" type="button" onClick={() => setPage("home")}>⌂ GO TO HOME MENU</button>}<p class="voland-loader-note">Returns to Voland’s HOME-style launcher. Real Nintendo HOME Menu boot support is still in development.</p></section>
             <section class="voland-panel voland-loader"><div class="voland-panel-heading"><h2>Homebrew loader</h2><span>NRO</span></div><label class="voland-file-label" for="nro-file">Choose a homebrew file</label><input id="nro-file" class="voland-file-input" type="file" accept=".nro,application/octet-stream" onChange={(event) => setSelectedNro(event.currentTarget.files?.[0] ?? null)} /><div class="voland-file-name">{selectedNro()?.name ?? "No NRO selected"}</div><button class="voland-load-button" type="button" disabled={!selectedNro()} onClick={loadSelected}>Load NRO</button><For each={demos}>{(demo) => <a class="voland-sample-link" href={`${import.meta.env.BASE_URL}homebrew/${demo.file}`} download={demo.file}>Download {demo.name}</a>}</For><p class="voland-loader-note">NRO homebrew runs in the guest CPU. Your files stay in this browser session.</p></section>
-            <section class="voland-panel voland-log"><div class="voland-panel-heading"><h2>Event log</h2><span>LIVE</span></div><div class="voland-log-scroll"><For each={logs()}>{(entry) => <p class={`log-line log-${entry.level}`}>{`[${entry.level.toUpperCase().padEnd(5, " ")}] ${entry.message}`}</p>}</For></div></section>
+            <section class="voland-panel voland-log"><div class="voland-panel-heading"><h2>Event log</h2><span>LIVE</span></div><div class="voland-log-scroll"><For each={logs()}>{(entry) => {
+              const guideMarker = "docs/DUMP.md";
+              const guideIndex = entry.message.indexOf(guideMarker);
+              return <p class={`log-line log-${entry.level}`}>{`[${entry.level.toUpperCase().padEnd(5, " ")}] `}{guideIndex < 0 ? entry.message : <>
+                {entry.message.slice(0, guideIndex)}
+                <a class="log-guide-link" href="https://github.com/beans-jusfine/Voland/blob/main/docs/DUMP.md" target="_blank" rel="noopener noreferrer">Open dumping guide</a>
+                {entry.message.slice(guideIndex + guideMarker.length)}
+              </>}</p>;
+            }}</For></div></section>
           </aside>
         </main>
       )}

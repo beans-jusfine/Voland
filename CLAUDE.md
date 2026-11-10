@@ -7,8 +7,7 @@ writing code — section numbers are cited below.
 
 ## Current phase
 
-**Phase 1 — Load & Memory.** Task list: DESIGN.md §25. Phase 0 is
-complete. Do not start work belonging to a later phase, even if it seems
+**Phase 2 — First Instructions.** Phase 1 is complete. Task list: DESIGN.md §25. Do not start work belonging to a later phase, even if it seems
 adjacent.
 <!-- Maintainer updates this line at each phase gate. -->
 
