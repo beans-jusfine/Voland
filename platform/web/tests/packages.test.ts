@@ -96,3 +96,21 @@ test("rejects malformed PFS0 tables", async () => {
 test("rejects unknown package formats", async () => {
   await assert.rejects(() => inspectGamePackage(new Blob([new Uint8Array(64)]), "game.bin"), /Unsupported package/);
 });
+
+ 
+test("directs encrypted NCA selections to the dumping guide", async () => {
+  const encrypted = new Uint8Array(0x204);
+  await assert.rejects(
+    () => inspectGamePackage(new Blob([encrypted]), "game.nca"),
+    /NCA header is encrypted or invalid.*docs\/DUMP\.md/,
+  );
+});
+
+test("does not mistake a plaintext NCA for an encrypted input", async () => {
+  const plaintext = new Uint8Array(0x204);
+  plaintext.set(new TextEncoder().encode("NCA3"), 0x200);
+  await assert.rejects(
+    () => inspectGamePackage(new Blob([plaintext]), "game.nca"),
+    /decrypted NCA file, not an NSP\/XCI container/,
+  );
+});
