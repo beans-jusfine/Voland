@@ -184,28 +184,26 @@ static bool execute_one(InterpreterState *s) {
     write_reg(s,rd,value,is64,false); return true;
   }
 
-  /* MADD / MSUB: multiply two registers and add/subtract an accumulator. */
+  /* MADD / MSUB consume normalized operands and operation ID. */
   if (decoded.op == A64_OP_MADD || decoded.op == A64_OP_MSUB) {
-    const bool is64=(insn>>31)!=0, subtract=((insn>>15)&1u)!=0;
-    const unsigned rm=(insn>>16)&31u, ra=(insn>>10)&31u;
-    const unsigned rn=(insn>>5)&31u, rd=insn&31u;
-    const uint64_t left=read_reg(s,rn,is64,false);
-    const uint64_t right=read_reg(s,rm,is64,false);
-    const uint64_t accumulator=read_reg(s,ra,is64,false);
+    const bool is64=(decoded.aux & A64_AUX_IS_64)!=0u;
+    const uint64_t left=read_reg(s,decoded.rn,is64,false);
+    const uint64_t right=read_reg(s,decoded.rm,is64,false);
+    const uint64_t accumulator=read_reg(s,decoded.ra,is64,false);
     const uint64_t product=left*right;
-    const uint64_t result=subtract?accumulator-product:accumulator+product;
-    write_reg(s,rd,result,is64,false);
+    const uint64_t result=decoded.op==A64_OP_MSUB?
+        accumulator-product:accumulator+product;
+    write_reg(s,decoded.rd,result,is64,false);
     return true;
   }
 
-  /* UDIV / SDIV: divide Rn by Rm. A zero divisor produces zero;
-   * signed minimum divided by -1 preserves the minimum value. */
+  /* UDIV / SDIV: operation ID carries signedness; operands and width
+   * come from the normalized record. A zero divisor produces zero. */
   if (decoded.op == A64_OP_UDIV || decoded.op == A64_OP_SDIV) {
-    const bool is64=(insn>>31)!=0;
-    const bool is_signed=(insn & 0x00000400u)!=0;
-    const unsigned rm=(insn>>16)&31u, rn=(insn>>5)&31u, rd=insn&31u;
-    const uint64_t numerator=read_reg(s,rn,is64,false);
-    const uint64_t denominator=read_reg(s,rm,is64,false);
+    const bool is64=(decoded.aux & A64_AUX_IS_64)!=0u;
+    const bool is_signed=decoded.op==A64_OP_SDIV;
+    const uint64_t numerator=read_reg(s,decoded.rn,is64,false);
+    const uint64_t denominator=read_reg(s,decoded.rm,is64,false);
     uint64_t result=0;
     if (denominator!=0u) {
       if (is_signed) {
@@ -224,45 +222,41 @@ static bool execute_one(InterpreterState *s) {
         result=numerator/denominator;
       }
     }
-    write_reg(s,rd,result,is64,false);
+    write_reg(s,decoded.rd,result,is64,false);
     return true;
   }
 
-  /* CCMN (register): conditionally add Rn and Rm and update NZCV;
-   * when the condition fails, load the immediate NZCV field instead. */
+  /* CCMN consumes the decoder's normalized condition and fallback NZCV. */
   if (decoded.op == A64_OP_CCMN_REG) {
-    const bool is64=(insn>>31)!=0;
-    const unsigned cond=(insn>>12)&15u;
-    const unsigned rm=(insn>>16)&31u, rn=(insn>>5)&31u;
+    const bool is64=(decoded.aux & A64_AUX_IS_64)!=0u;
+    const unsigned cond=(decoded.aux >> A64_AUX_COND_SHIFT)&15u;
+    const unsigned nzcv=(decoded.aux >> A64_AUX_NZCV_SHIFT)&15u;
     if (condition_passed(s->regs.pstate,cond)) {
-      const uint64_t left=read_reg(s,rn,is64,false);
-      const uint64_t right=read_reg(s,rm,is64,false);
+      const uint64_t left=read_reg(s,decoded.rn,is64,false);
+      const uint64_t right=read_reg(s,decoded.rm,is64,false);
       const uint64_t result=left+right;
       set_nzcv_addsub(s,left,right,result,is64,false);
     } else {
-      s->regs.pstate=(s->regs.pstate&0x0fffffffu)|((insn&15u)<<28);
+      s->regs.pstate=(s->regs.pstate&0x0fffffffu)|(nzcv<<28);
     }
     return true;
   }
 
-  /* CSEL / CSINC / CSINV / CSNEG: select Rn when the condition
-   * holds; otherwise select Rm, optionally incremented, inverted, or negated. */
-  if (decoded.op == A64_OP_CSEL || decoded.op == A64_OP_CSINC || decoded.op == A64_OP_CSINV || decoded.op == A64_OP_CSNEG) {
-    const bool is64=(insn>>31)!=0;
-    const bool invert=((insn>>30)&1u)!=0;
-    const bool transform=((insn>>10)&1u)!=0;
-    const unsigned cond=(insn>>12)&15u;
-    const unsigned rm=(insn>>16)&31u, rn=(insn>>5)&31u, rd=insn&31u;
+  /* Conditional select operation ID carries the fallback transform. */
+  if (decoded.op == A64_OP_CSEL || decoded.op == A64_OP_CSINC ||
+      decoded.op == A64_OP_CSINV || decoded.op == A64_OP_CSNEG) {
+    const bool is64=(decoded.aux & A64_AUX_IS_64)!=0u;
+    const unsigned cond=(decoded.aux >> A64_AUX_COND_SHIFT)&15u;
     uint64_t result;
     if (condition_passed(s->regs.pstate,cond)) {
-      result=read_reg(s,rn,is64,false);
+      result=read_reg(s,decoded.rn,is64,false);
     } else {
-      result=read_reg(s,rm,is64,false);
-      if (invert && transform) result=UINT64_C(0)-result; /* CSNEG */
-      else if (invert) result=~result;                       /* CSINV */
-      else if (transform) result+=1u;                        /* CSINC */
+      result=read_reg(s,decoded.rm,is64,false);
+      if (decoded.op==A64_OP_CSNEG) result=UINT64_C(0)-result;
+      else if (decoded.op==A64_OP_CSINV) result=~result;
+      else if (decoded.op==A64_OP_CSINC) result+=1u;
     }
-    write_reg(s,rd,result,is64,false);
+    write_reg(s,decoded.rd,result,is64,false);
     return true;
   }
 
