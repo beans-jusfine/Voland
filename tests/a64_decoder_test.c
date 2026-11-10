@@ -66,6 +66,9 @@ int main(void) {
   CHECK(a64_decode(UINT32_C(0xba411024), &decoded)); /* CCMN X1,X1,#4,NE */
   CHECK(decoded.op == A64_OP_CCMN_REG);
   CHECK(decoded.rn == 1u && decoded.rm == 1u);
+  CHECK((decoded.aux & A64_AUX_IS_64) != 0u);
+  CHECK(((decoded.aux >> A64_AUX_COND_SHIFT) & 15u) == 1u);
+  CHECK(((decoded.aux >> A64_AUX_NZCV_SHIFT) & 15u) == 4u);
   CHECK(!a64_decode(UINT32_C(0xba411824), &decoded)); /* CCMN immediate */
 
   CHECK(a64_decode(UINT32_C(0xd503201f), &decoded)); /* NOP */
