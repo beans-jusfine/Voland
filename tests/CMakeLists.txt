@@ -72,6 +72,19 @@ add_executable(interpreter_test interpreter_test.c)
 target_link_libraries(interpreter_test PRIVATE switch_core)
 add_test(NAME interpreter_test COMMAND interpreter_test)
 
+# Generated A64 decoder ABI, vectors, metadata, and source reproducibility.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(A64_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/a64")
+add_executable(a64_decoder_test a64_decoder_test.c)
+target_link_libraries(a64_decoder_test PRIVATE switch_core)
+target_include_directories(a64_decoder_test PRIVATE "${A64_GENERATED_DIR}")
+add_dependencies(a64_decoder_test voland_a64_decoder_generated)
+add_test(NAME a64_decoder_test COMMAND a64_decoder_test)
+add_test(NAME a64_decoder_generated_check
+  COMMAND ${Python3_EXECUTABLE}
+          "${PROJECT_SOURCE_DIR}/tools/a64/generate_decoder.py"
+          --check --output-dir "${A64_GENERATED_DIR}")
+
 #
 # core/hle/kernel/svc_memory (§25 checkbox 5): SVC-path tests over a real
 # process_bootstrap()'d Process, driven through hle_on_svc the way

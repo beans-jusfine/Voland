@@ -237,7 +237,7 @@ int main(void) {
 
   /* CCMN X1, X1, #4, NE: add and set NZCV when NE holds;
    * otherwise load the encoded immediate NZCV value (Z=1). */
-  const uint32_t ccmn_program[] = { UINT32_C(0xba411824) };
+  const uint32_t ccmn_program[] = { UINT32_C(0xba411024) }; /* bit 11 = 0 selects register form */
   CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0x140, ccmn_program, sizeof(ccmn_program)));
   backend->set_reg(state, 1, 5);
   backend->set_pstate(state, 0); /* NE: condition true, 5 + 5 = 10 */
