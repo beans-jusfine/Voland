@@ -116,6 +116,28 @@ int main(void) {
   CHECK(backend->get_reg(state, 11) == 93);
   CHECK((backend->get_pstate(state) & 0xf0000000u) == 0x20000000u);
 
+  /* ADD/SUB immediate: normalized immediates, flag-setting aliases,
+   * and architectural SP behavior for register field 31. */
+  const uint32_t immediate_arithmetic_program[] = {
+    UINT32_C(0x91002029), /* ADD X9, X1, #8 */
+    UINT32_C(0xd100202a), /* SUB X10, X1, #8 */
+    UINT32_C(0xb100202b), /* ADDS X11, X1, #8 */
+    UINT32_C(0xf100203f), /* SUBS XZR, X1, #8 (CMP alias) */
+    UINT32_C(0x910043ff), /* ADD SP, SP, #16 */
+  };
+  CHECK_OK(vmm_write_block(vmm, CODE_GVA + 0x180,
+                           immediate_arithmetic_program,
+                           sizeof(immediate_arithmetic_program)));
+  backend->set_reg(state, 1, 100);
+  backend->set_sp(state, UINT64_C(0x1000));
+  backend->set_pc(state, CODE_GVA + 0x180);
+  CHECK(backend->run(state, 5) == CPU_EXIT_CYCLES_ELAPSED);
+  CHECK(backend->get_reg(state, 9) == 108);
+  CHECK(backend->get_reg(state, 10) == 92);
+  CHECK(backend->get_reg(state, 11) == 108);
+  CHECK(backend->get_sp(state) == UINT64_C(0x1010));
+  CHECK((backend->get_pstate(state) & 0xf0000000u) == 0x20000000u);
+
   /* MADD/MSUB: 64-bit multiply-accumulate and 32-bit result truncation. */
   const uint32_t multiply_program[] = {
     UINT32_C(0x9b020c20), /* MADD X0, X1, X2, X3 */
