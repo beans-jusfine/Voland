@@ -82,6 +82,7 @@
 
 /* Handle encoding (linear_id << 15) | index; first entry, first id. */
 #define PROCESS_MAIN_THREAD_HANDLE ((uint32_t)0x8000)
+#define PROCESS_MAX_CHILD_THREADS (TLS_MAX_BLOCKS - 1u)
 
 /* One guard page below the main-thread stack. */
 #define PROCESS_STACK_GUARD_PAGES ((uint64_t)1)
@@ -128,6 +129,7 @@ typedef struct Process {
   Handle_Table handles;
   IPC_Session_Pool ipc_sessions; /* stable storage; guest handles live in handles */
   Guest_Thread main_thread;
+  Guest_Thread child_threads[PROCESS_MAX_CHILD_THREADS];
   uint32_t main_thread_handle;
   Address_Region main_thread_stack; /* mapped RW; SP starts at base + size */
   uint64_t main_thread_tls_gva;     /* first block from `tls` */

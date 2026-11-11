@@ -64,6 +64,7 @@ Error emulator_create(Emulator* out) {
    * `out->cpu_state` above being handed `&out->hle` before
    * hle_context_init() has even run (see hle.h's doc comment). */
   hle_context_init(&out->hle, out->cpu_backend, out->vmm, &out->process, &out->pages);
+  out->hle.scheduler = &out->scheduler;
   out->cpu_backend->set_svc_handler(out->cpu_state, hle_on_svc);
   out->cpu_backend->set_undefined_handler(out->cpu_state, hle_on_undefined);
 
@@ -302,6 +303,19 @@ Error emulator_load_nro(Emulator *emulator, const Byte_Source *nro_source,
 
 void emulator_unload_program(Emulator* emulator) {
   if (!emulator || !emulator->program_loaded) return;
+  const Thread_Env thread_env = {
+      .backend = emulator->cpu_backend, .vmm = emulator->vmm,
+      .tls = &emulator->process.tls, .hle = &emulator->hle,
+  };
+  for (uint32_t i = 0; i < PROCESS_MAX_CHILD_THREADS; i++) {
+    Guest_Thread *thread = &emulator->process.child_threads[i];
+    if (!thread->cpu_state) continue;
+    if (thread->scheduler_id) {
+      (void)scheduler_remove_thread(&emulator->scheduler, thread->scheduler_id);
+      thread->scheduler_id = 0;
+    }
+    thread_destroy(&thread_env, thread);
+  }
   (void)scheduler_remove_thread(&emulator->scheduler, emulator->main_thread_scheduler_id);
   emulator->main_thread_scheduler_id = 0;
   process_teardown(&emulator->process, emulator->vmm, &emulator->pages);

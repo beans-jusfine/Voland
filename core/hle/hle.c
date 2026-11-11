@@ -3,6 +3,7 @@
 #include "common/log.h"
 #include "hle/kernel/svc_ipc.h"
 #include "hle/kernel/svc_memory.h"
+#include "hle/kernel/thread.h"
 
 #include <stddef.h>
 
@@ -15,11 +16,122 @@ void hle_context_init(HLE_Context *context, const CPU_Backend *backend,
   context->vmm = vmm;
   context->process = process;
   context->pages = pages;
+  context->scheduler = NULL;
   context->svc_call_count = 0;
   /* Unbound until the owner binds it (emulator.c binds sm's object);
    * ConnectToNamedPort on an unbound object answers NOT_IMPLEMENTED
    * through ipc_dispatch rather than crashing. */
   context->sm_object = (Service_Object){.interface = NULL, .instance = NULL};
+}
+
+static Guest_Thread *thread_for_state(Process *process, CPU_State *state) {
+  if (!process || !state) return NULL;
+  if (process->main_thread.cpu_state == state) return &process->main_thread;
+  for (uint32_t i = 0; i < PROCESS_MAX_CHILD_THREADS; i++) {
+    Guest_Thread *thread = &process->child_threads[i];
+    if (thread->cpu_state == state) return thread;
+  }
+  return NULL;
+}
+
+static uint32_t thread_create_result(Error err) {
+  switch (err.code) {
+  case RESULT_OUT_OF_MEMORY: return HLE_RESULT_OUT_OF_MEMORY;
+  case RESULT_INVALID_ARGUMENT: return HLE_RESULT_OUT_OF_RANGE;
+  default: return HLE_RESULT_INVALID_HANDLE;
+  }
+}
+
+static void hle_svc_create_thread(HLE_Context *context, CPU_State *cpu_state) {
+  CPU_Register_File *regs = context->cpu_backend->get_register_file(cpu_state);
+  if (!context->process || !context->scheduler ||
+      !npdm_svc_allowed(&context->process->npdm, 0x08)) {
+    regs->x[0] = HLE_RESULT_NOT_IMPLEMENTED;
+    return;
+  }
+  if (regs->x[4] > THREAD_PRIORITY_LOWEST ||
+      regs->x[5] >= SCHEDULER_VIRTUAL_CORE_COUNT) {
+    regs->x[0] = HLE_RESULT_OUT_OF_RANGE;
+    return;
+  }
+  const uint64_t entry = regs->x[1];
+  const uint64_t argument = regs->x[2];
+  const uint64_t stack_top = regs->x[3];
+  const uint32_t priority = (uint32_t)regs->x[4];
+  const uint32_t core = (uint32_t)regs->x[5];
+  const NPDM_Kernel_Capabilities *caps = &context->process->npdm.capabilities;
+  if (caps->has_thread_info &&
+      (priority < caps->highest_priority || priority > caps->lowest_priority ||
+       core < caps->min_core || core > caps->max_core)) {
+    regs->x[0] = HLE_RESULT_OUT_OF_RANGE;
+    return;
+  }
+  Guest_Thread *slot = NULL;
+  for (uint32_t i = 0; i < PROCESS_MAX_CHILD_THREADS; i++) {
+    if (!context->process->child_threads[i].cpu_state) {
+      slot = &context->process->child_threads[i];
+      break;
+    }
+  }
+  if (!slot) {
+    regs->x[0] = HLE_RESULT_OUT_OF_MEMORY;
+    return;
+  }
+  const Thread_Env env = {
+      .backend = context->cpu_backend, .vmm = context->vmm,
+      .tls = &context->process->tls, .hle = context,
+  };
+  const Thread_Create_Params params = {
+      .entry_point = entry, .argument = argument, .stack_top = stack_top,
+      .priority = priority, .preferred_core = core,
+  };
+  Error err = thread_create(&env, &params, slot);
+  if (!error_is_ok(err)) {
+    regs->x[0] = thread_create_result(err);
+    return;
+  }
+  uint32_t handle = 0;
+  err = handle_table_insert(&context->process->handles, KERNEL_OBJECT_THREAD,
+                            slot, &handle);
+  if (!error_is_ok(err)) {
+    thread_destroy(&env, slot);
+    regs->x[0] = HLE_RESULT_OUT_OF_MEMORY;
+    return;
+  }
+  regs->x[0] = HLE_RESULT_SUCCESS;
+  regs->x[1] = handle;
+}
+
+static void hle_svc_start_thread(HLE_Context *context, CPU_State *cpu_state) {
+  CPU_Register_File *regs = context->cpu_backend->get_register_file(cpu_state);
+  if (!context->process || !context->scheduler ||
+      !npdm_svc_allowed(&context->process->npdm, 0x09)) {
+    regs->x[0] = HLE_RESULT_NOT_IMPLEMENTED;
+    return;
+  }
+  void *object = NULL;
+  const Error lookup = handle_table_get(&context->process->handles,
+      (uint32_t)regs->x[0], KERNEL_OBJECT_THREAD, &object);
+  if (!error_is_ok(lookup) || !object) {
+    regs->x[0] = HLE_RESULT_INVALID_HANDLE;
+    return;
+  }
+  Guest_Thread *thread = (Guest_Thread *)object;
+  if (!thread->owns_cpu_state || !thread->cpu_state || thread->scheduler_id) {
+    regs->x[0] = HLE_RESULT_INVALID_HANDLE;
+    return;
+  }
+  uint64_t scheduler_id = 0;
+  const Error add = scheduler_add_thread(context->scheduler, thread->cpu_state,
+      thread->priority, thread->preferred_core, SCHEDULER_ALL_CORE_AFFINITY,
+      &scheduler_id);
+  if (!error_is_ok(add)) {
+    regs->x[0] = add.code == RESULT_OUT_OF_MEMORY
+                     ? HLE_RESULT_OUT_OF_MEMORY : HLE_RESULT_INVALID_HANDLE;
+    return;
+  }
+  thread->scheduler_id = scheduler_id;
+  regs->x[0] = HLE_RESULT_SUCCESS;
 }
 
 static const char *svc_name(uint32_t swi)
@@ -127,6 +239,12 @@ void hle_on_svc(CPU_State *cpu_state, uint32_t swi, void *userdata)
     break;
   case 0x06:
     hle_svc_query_memory(context, cpu_state);
+    break;
+  case 0x08:
+    hle_svc_create_thread(context, cpu_state);
+    break;
+  case 0x09:
+    hle_svc_start_thread(context, cpu_state);
     break;
   case 0x16:
     hle_svc_close_handle(context, cpu_state);

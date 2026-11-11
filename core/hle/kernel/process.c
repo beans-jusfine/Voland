@@ -324,6 +324,7 @@ Error process_bootstrap_nro(const NRO *nro, VMM_Context *vmm, Page_Allocator *pa
   profile.is_64bit_instruction = true;
   profile.address_space = NPDM_ADDRESS_SPACE_64_BIT_39;
   profile.main_thread_priority = 30;
+  profile.capabilities.svc_mask[0] |= (UINT64_C(1) << 0x08) | (UINT64_C(1) << 0x09);
   profile.main_thread_core_number = 0;
   profile.main_thread_stack_size = 0x40000;
   memcpy(profile.name, "homebrew", sizeof("homebrew"));

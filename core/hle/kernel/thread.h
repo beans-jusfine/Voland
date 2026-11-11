@@ -83,6 +83,7 @@ typedef struct Guest_Thread {
    * the emulator's CPU_State and process-owned TLS block instead. */
   bool owns_cpu_state;
   bool owns_tls;
+  uint64_t scheduler_id; /* zero until StartThread registers it */
 } Guest_Thread;
 
 /* Allocates a TLS block, creates a CPU_State bound to env->vmm with the

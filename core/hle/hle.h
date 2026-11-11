@@ -30,6 +30,7 @@
 #include "hle/kernel/ipc.h"
 #include "hle/kernel/page_allocator.h"
 #include "hle/kernel/process.h"
+#include "hle/kernel/scheduler.h"
 
 /* Switch OS result codes (subset relevant to Phase 0). Horizon Result
  * encoding: (description << 9) | module. Module 1 is the kernel - these
@@ -69,6 +70,7 @@ typedef struct HLE_Context
   const CPU_Backend *cpu_backend;
   VMM_Context *vmm;      /* softmmu (§5); the only guest-memory gateway memory SVCs use */
   Process *process;      /* the loaded process (§12); valid once emulator_load_program() has run */
+  Scheduler *scheduler;  /* owning emulator scheduler; started guest threads join it */
   Page_Allocator *pages; /* guest physical pages (§4), shared with the bootstrap */
   /* The object ConnectToNamedPort("sm:") binds a new session to - see
    * svc_ipc.c. hle_context_init leaves it unbound (NULL interface); the
