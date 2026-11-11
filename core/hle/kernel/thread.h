@@ -35,6 +35,7 @@
 #ifndef SWITCH_HLE_KERNEL_THREAD_H
 #define SWITCH_HLE_KERNEL_THREAD_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "common/result.h"
@@ -77,6 +78,10 @@ typedef struct Guest_Thread {
   uint64_t stack_top;
   uint32_t priority;
   uint32_t preferred_core;
+  /* Standalone threads own these resources. The process main thread adopts
+   * the emulator's CPU_State and process-owned TLS block instead. */
+  bool owns_cpu_state;
+  bool owns_tls;
 } Guest_Thread;
 
 /* Allocates a TLS block, creates a CPU_State bound to env->vmm with the
