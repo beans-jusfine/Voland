@@ -38,9 +38,9 @@
  *
  * The main thread handle is PROCESS_MAIN_THREAD_HANDLE. Horizon encodes
  * handles as (linear_id << 15) | index with linear ids starting at 1, so
- * the first entry of a fresh table is 0x8000; the Phase 2 handle table
- * must issue exactly that entry to the main thread. Until it exists the
- * constant is the contract.
+ * the first entry of the process handle table is 0x8000; bootstrap
+ * registers the embedded main-thread object first and verifies that
+ * exact handle.
  *
  * Failure leaves no mapping behind: every vmm_map the bootstrap made is
  * unmapped before the error returns. Physical pages are NOT returned
@@ -66,7 +66,9 @@
 #include "common/vmm.h"
 #include "cpu/cpu.h"
 #include "hle/kernel/address_space.h"
+#include "hle/kernel/handle_table.h"
 #include "hle/kernel/page_allocator.h"
+#include "hle/kernel/thread.h"
 #include "hle/kernel/tls.h"
 #include "hle/loader/exefs.h"
 #include "hle/loader/npdm.h"
@@ -119,7 +121,11 @@ typedef struct Process {
   uint32_t module_count;
   uint64_t entry_point; /* rtld (or main) .text base */
 
-  /* Main thread. */
+  /* Per-process kernel objects. The main thread is always the first
+   * handle-table entry (0x8000); its CPU_State is adopted by
+   * process_enter_main_thread after the emulator has created it. */
+  Handle_Table handles;
+  Guest_Thread main_thread;
   uint32_t main_thread_handle;
   Address_Region main_thread_stack; /* mapped RW; SP starts at base + size */
   uint64_t main_thread_tls_gva;     /* first block from `tls` */
@@ -173,7 +179,7 @@ Error process_bootstrap_nro(const NRO *nro, VMM_Context *vmm, Page_Allocator *pa
  * PC = entry_point, PSTATE = 0, tpidrro_el0 = TLS block (via
  * set_sys_reg with CPU_SYSREG_TPIDRRO_EL0). RESULT_INVALID_ARGUMENT on
  * NULL. Idempotent: calling it again re-arms the same start state. */
-Error process_enter_main_thread(const Process *process, const CPU_Backend *backend,
+Error process_enter_main_thread(Process *process, const CPU_Backend *backend,
                                 CPU_State *state);
 
 /* The module containing `gva`, or NULL. For fault reporting and §19

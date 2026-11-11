@@ -7,10 +7,11 @@
  * object that owns a thread's execution state and TLS block, and the
  * one place that arms `tpidrro_el0`. thread_create is what the Phase 2
  * CreateThread SVC will call once it has validated its arguments against
- * the npdm and resolved the stack; the SVC itself, the handle table
- * entry, and every scheduler field of §7's Guest_Thread (run_state,
- * wake_at_ns, waiting_on, run-queue links) land with the scheduler in
- * Phase 2 - they are deliberately absent here rather than stubbed.
+ * the npdm and resolved the stack; scheduler fields of §7's Guest_Thread
+ * (run_state, wake_at_ns, waiting_on, run-queue links) land with the
+ * scheduler in Phase 2 - they are deliberately absent here rather than
+ * stubbed. Every thread, including the process main thread, is now a
+ * typed object in the process-owned handle table.
  *
  * Plumbing note: under green threading (§7) "set tpidrro_el0 on every
  * context switch" reduces to "every CPU_State carries its own value":
@@ -19,12 +20,11 @@
  * register is written once, here, through the backend's sys-reg
  * interface, and never touched again for the thread's lifetime.
  *
- * The main thread is the one thread not created here: the bootstrap
- * (process.h) allocates its TLS block from the same allocator and
- * process_enter_main_thread arms the emulator's pre-existing CPU_State
- * with the Horizon entry ABI (X1 = handle), which CreateThread threads
- * do not receive. Folding the main thread into a Guest_Thread is a
- * Phase 2 change that arrives with the scheduler owning all states.
+ * The main thread is embedded in Process: bootstrap registers its
+ * Guest_Thread object before execution, then process_enter_main_thread
+ * adopts the emulator's pre-existing CPU_State without taking ownership
+ * of that state or the process-owned TLS block. Standalone threads
+ * created here own both resources.
  *
  * Stacks are the caller's: CreateThread receives an SP the guest already
  * mapped (its own heap or stack region), so thread_create takes a stack
@@ -41,8 +41,9 @@
 #include "common/result.h"
 #include "common/vmm.h"
 #include "cpu/cpu.h"
-#include "hle/hle.h"
 #include "hle/kernel/tls.h"
+
+struct HLE_Context;
 
 /* Horizon priority range, 0 highest .. 63 lowest. npdm.h bounds the
  * subset a title may use; the SVC enforces that, this unit enforces only
@@ -60,7 +61,7 @@ typedef struct Thread_Env {
   const CPU_Backend *backend;
   VMM_Context *vmm;
   TLS_Allocator *tls;
-  HLE_Context *hle; /* the state's SVC/undefined handlers dispatch here */
+  struct HLE_Context *hle; /* the state's SVC/undefined handlers dispatch here */
 } Thread_Env;
 
 typedef struct Thread_Create_Params {

@@ -4,6 +4,8 @@
  */
 #include "hle/kernel/thread.h"
 
+#include "hle/hle.h"
+
 #include <string.h>
 
 Error thread_create(const Thread_Env *env, const Thread_Create_Params *params,
@@ -52,15 +54,17 @@ Error thread_create(const Thread_Env *env, const Thread_Create_Params *params,
   out->stack_top = params->stack_top;
   out->priority = params->priority;
   out->preferred_core = params->preferred_core;
+  out->owns_cpu_state = true;
+  out->owns_tls = true;
   return OK;
 }
 
 void thread_destroy(const Thread_Env *env, Guest_Thread *thread) {
   if (!env || !thread) return;
-  if (thread->cpu_state && env->backend) {
+  if (thread->owns_cpu_state && thread->cpu_state && env->backend) {
     env->backend->destroy(thread->cpu_state);
   }
-  if (thread->cpu_state && env->tls) {
+  if (thread->owns_tls && env->tls) {
     (void)tls_free(env->tls, thread->tls_gva);
   }
   memset(thread, 0, sizeof(*thread));
