@@ -21,9 +21,10 @@ static const char *session_name(const IPC_Session *session) {
 
 /* Closes the first `count` handles of `handles` - the rollback for a
  * response whose handles never reach the guest. */
-static void close_handles(IPC_Session_Table *sessions, const uint32_t *handles, uint32_t count) {
+static void close_handles(HLE_Context *context, const uint32_t *handles, uint32_t count) {
   for (uint32_t i = 0; i < count; i++) {
-    const bool closed = ipc_session_table_close(sessions, handles[i]);
+    const bool closed = ipc_session_close(&context->process->handles,
+                                          &context->process->ipc_sessions, handles[i]);
     SWITCH_ASSERT_ALWAYS(closed, "svc_ipc: rolling back a session that was never opened");
   }
 }
@@ -60,8 +61,11 @@ void hle_svc_connect_to_named_port(HLE_Context *context, CPU_State *cpu_state) {
     return;
   }
 
-  const uint32_t handle = ipc_session_table_open(&context->sessions, context->sm_object);
-  if (handle == IPC_INVALID_HANDLE) {
+  uint32_t handle = 0;
+  const Error open_err = ipc_session_open(&context->process->handles,
+                                          &context->process->ipc_sessions,
+                                          context->sm_object, &handle);
+  if (!error_is_ok(open_err)) {
     regs->x[0] = HLE_RESULT_OUT_OF_SESSIONS;
     return;
   }
@@ -74,7 +78,7 @@ void hle_svc_send_sync_request(HLE_Context *context, CPU_State *cpu_state) {
   CPU_Register_File *regs = context->cpu_backend->get_register_file(cpu_state);
   const uint32_t handle = (uint32_t)regs->x[0];
 
-  IPC_Session *session = ipc_session_table_get(&context->sessions, handle);
+  IPC_Session *session = ipc_session_get(&context->process->handles, handle);
   if (!session) {
     regs->x[0] = HLE_RESULT_INVALID_HANDLE;
     return;
@@ -135,9 +139,11 @@ void hle_svc_send_sync_request(HLE_Context *context, CPU_State *cpu_state) {
    * a handle the guest never receives must not hold a slot. */
   uint32_t out_handles[IPC_MAX_OUT_OBJECTS];
   for (uint32_t i = 0; i < response.out_object_count; i++) {
-    out_handles[i] = ipc_session_table_open(&context->sessions, response.out_objects[i]);
-    if (out_handles[i] == IPC_INVALID_HANDLE) {
-      close_handles(&context->sessions, out_handles, i);
+    const Error open_err = ipc_session_open(&context->process->handles,
+                                            &context->process->ipc_sessions,
+                                            response.out_objects[i], &out_handles[i]);
+    if (!error_is_ok(open_err)) {
+      close_handles(context, out_handles, i);
       regs->x[0] = HLE_RESULT_OUT_OF_SESSIONS;
       return;
     }
@@ -152,7 +158,7 @@ void hle_svc_send_sync_request(HLE_Context *context, CPU_State *cpu_state) {
   const Error write_back_err = vmm_write_block(
       context->vmm, context->process->main_thread_tls_gva, command_buffer, sizeof(command_buffer));
   if (!error_is_ok(write_back_err)) {
-    close_handles(&context->sessions, out_handles, response.out_object_count);
+    close_handles(context, out_handles, response.out_object_count);
     regs->x[0] = HLE_RESULT_INVALID_POINTER;
     return;
   }
@@ -164,7 +170,7 @@ void hle_svc_close_handle(HLE_Context *context, CPU_State *cpu_state) {
   CPU_Register_File *regs = context->cpu_backend->get_register_file(cpu_state);
   const uint32_t handle = (uint32_t)regs->x[0];
 
-  if (!ipc_session_table_close(&context->sessions, handle)) {
+  if (!ipc_session_close(&context->process->handles, &context->process->ipc_sessions, handle)) {
     regs->x[0] = HLE_RESULT_INVALID_HANDLE;
     return;
   }

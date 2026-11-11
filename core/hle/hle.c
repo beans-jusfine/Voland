@@ -20,13 +20,6 @@ void hle_context_init(HLE_Context *context, const CPU_Backend *backend,
    * ConnectToNamedPort on an unbound object answers NOT_IMPLEMENTED
    * through ipc_dispatch rather than crashing. */
   context->sm_object = (Service_Object){.interface = NULL, .instance = NULL};
-  hle_reset_process_state(context);
-}
-
-void hle_reset_process_state(HLE_Context *context)
-{
-  SWITCH_ASSERT_ALWAYS(context != NULL, "hle_reset_process_state: context is NULL");
-  ipc_session_table_init(&context->sessions);
 }
 
 static const char *svc_name(uint32_t swi)

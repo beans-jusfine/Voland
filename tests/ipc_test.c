@@ -331,43 +331,55 @@ static void test_response_write_rejects_handle_count_mismatch(void) {
   CHECK_CODE(ipc_response_write(buf, BUF_BYTES, &res, &handle, 0), RESULT_INVALID_ARGUMENT);
 }
 
-/* --- session table --- */
+/* --- generic process handles + session object storage --- */
 
-static void test_session_table_open_get_close(void) {
-  IPC_Session_Table table;
-  ipc_session_table_init(&table);
-
+static void test_session_pool_open_get_close(void) {
+  Handle_Table handles;
+  handle_table_init(&handles);
+  int main_thread_marker = 0;
+  uint32_t main_thread_handle = 0;
+  CHECK_OK(handle_table_insert(&handles, KERNEL_OBJECT_THREAD, &main_thread_marker,
+                               &main_thread_handle));
+  CHECK(main_thread_handle == 0x8000u);
+  IPC_Session_Pool pool;
+  ipc_session_pool_init(&pool);
   const Service_Object object = {.interface = &fake_interface, .instance = (void *)0x1234};
-  const uint32_t handle = ipc_session_table_open(&table, object);
-  CHECK(handle != IPC_INVALID_HANDLE);
-
-  IPC_Session *session = ipc_session_table_get(&table, handle);
+  uint32_t handle = 0;
+  CHECK_OK(ipc_session_open(&handles, &pool, object, &handle));
+  CHECK(handle == 0x8001u);
+  CHECK(ipc_session_get(&handles, main_thread_handle) == NULL);
+  IPC_Session *session = ipc_session_get(&handles, handle);
   CHECK(session != NULL);
   CHECK(session->object.interface == &fake_interface);
   CHECK(session->object.instance == (void *)0x1234);
   CHECK(!session->is_domain);
-
-  CHECK(ipc_session_table_get(&table, handle + 1000) == NULL);
-  CHECK(ipc_session_table_get(&table, IPC_INVALID_HANDLE) == NULL);
-
-  CHECK(ipc_session_table_close(&table, handle));
-  CHECK(ipc_session_table_get(&table, handle) == NULL);
-  CHECK(!ipc_session_table_close(&table, handle)); /* already closed */
-
-  /* The freed slot is reused by the next open. */
-  const uint32_t reopened = ipc_session_table_open(&table, object);
-  CHECK(reopened == handle);
+  CHECK(ipc_session_get(&handles, handle + 1000u) == NULL);
+  CHECK(ipc_session_get(&handles, 0) == NULL);
+  CHECK(ipc_session_close(&handles, &pool, handle));
+  CHECK(ipc_session_get(&handles, handle) == NULL);
+  CHECK(!ipc_session_close(&handles, &pool, handle));
+  uint32_t reopened = 0;
+  CHECK_OK(ipc_session_open(&handles, &pool, object, &reopened));
+  CHECK(reopened != handle);
+  CHECK(ipc_session_get(&handles, handle) == NULL);
+  CHECK(ipc_session_get(&handles, reopened) != NULL);
 }
 
-static void test_session_table_exhaustion(void) {
-  IPC_Session_Table table;
-  ipc_session_table_init(&table);
+static void test_session_pool_exhaustion(void) {
+  Handle_Table handles;
+  handle_table_init(&handles);
+  int main_thread_marker = 0;
+  uint32_t main_thread_handle = 0;
+  CHECK_OK(handle_table_insert(&handles, KERNEL_OBJECT_THREAD, &main_thread_marker,
+                               &main_thread_handle));
+  IPC_Session_Pool pool;
+  ipc_session_pool_init(&pool);
   const Service_Object object = {0};
-
+  uint32_t handle = 0;
   for (uint32_t i = 0; i < IPC_MAX_SESSIONS; i++) {
-    CHECK(ipc_session_table_open(&table, object) != IPC_INVALID_HANDLE);
+    CHECK_OK(ipc_session_open(&handles, &pool, object, &handle));
   }
-  CHECK(ipc_session_table_open(&table, object) == IPC_INVALID_HANDLE);
+  CHECK_CODE(ipc_session_open(&handles, &pool, object, &handle), RESULT_OUT_OF_MEMORY);
 }
 
 int main(void) {
@@ -388,8 +400,8 @@ int main(void) {
   test_response_write_no_handles();
   test_response_write_one_handle();
   test_response_write_rejects_handle_count_mismatch();
-  test_session_table_open_get_close();
-  test_session_table_exhaustion();
+  test_session_pool_open_get_close();
+  test_session_pool_exhaustion();
   printf("[" CHECK_NAME "] all checks passed\n");
   return 0;
 }
