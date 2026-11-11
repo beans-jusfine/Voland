@@ -25,6 +25,31 @@ static uint64_t align_up_page(uint64_t value) {
   return (value + VMM_PAGE_OFFSET_MASK) & ~VMM_PAGE_OFFSET_MASK;
 }
 
+/* Registers the embedded process main thread as the first kernel
+ * object. Its CPU_State is supplied later by process_enter_main_thread;
+ * the process already owns the TLS block allocated by bootstrap. */
+static Error register_main_thread(Process *process) {
+  handle_table_init(&process->handles);
+  memset(&process->main_thread, 0, sizeof(process->main_thread));
+  process->main_thread.tls_gva = process->main_thread_tls_gva;
+  process->main_thread.entry_point = process->entry_point;
+  process->main_thread.stack_top =
+      process->main_thread_stack.base + process->main_thread_stack.size;
+  process->main_thread.priority = process->npdm.main_thread_priority;
+  process->main_thread.preferred_core = process->npdm.main_thread_core_number;
+  process->main_thread.owns_cpu_state = false;
+  process->main_thread.owns_tls = false;
+
+  Error err = handle_table_insert(&process->handles, KERNEL_OBJECT_THREAD,
+                                  &process->main_thread, &process->main_thread_handle);
+  if (!error_is_ok(err)) return err;
+  if (process->main_thread_handle != PROCESS_MAIN_THREAD_HANDLE) {
+    return ERR(RESULT_INVALID_ARGUMENT,
+               "process: main thread did not receive Horizon handle 0x8000");
+  }
+  return OK;
+}
+
 /* Bounded copy of a well-known module name (every name in the load
  * order fits PROCESS_MODULE_NAME_BYTES; the bound is defensive). */
 static void copy_name(char out[PROCESS_MODULE_NAME_BYTES], const char *name) {
@@ -250,8 +275,9 @@ Error process_bootstrap(const Process_Bootstrap_Params *params, Process *out) {
   err = tls_allocate(&out->tls, &out->main_thread_tls_gva);
   if (!error_is_ok(err)) goto fail;
 
-  out->main_thread_handle = PROCESS_MAIN_THREAD_HANDLE;
   out->npdm = *npdm;
+  err = register_main_thread(out);
+  if (!error_is_ok(err)) goto fail;
   log_info("process: '%s' bootstrapped, %u modules, entry 0x%010llx, stack 0x%010llx+0x%x, tls 0x%010llx",
            npdm->name, (unsigned)out->module_count, (unsigned long long)out->entry_point,
            (unsigned long long)out->main_thread_stack.base, (unsigned)npdm->main_thread_stack_size,
@@ -370,8 +396,9 @@ Error process_bootstrap_nro(const NRO *nro, VMM_Context *vmm, Page_Allocator *pa
   err = tls_allocate(&out->tls, &out->main_thread_tls_gva);
   if (!error_is_ok(err)) goto nro_fail;
 
-  out->main_thread_handle = PROCESS_MAIN_THREAD_HANDLE;
   out->npdm = profile;
+  err = register_main_thread(out);
+  if (!error_is_ok(err)) goto nro_fail;
   log_info("process: NRO homebrew bootstrapped at 0x%010llx (%llu KB)",
            (unsigned long long)out->entry_point,
            (unsigned long long)(nro->image_size / 1024));
@@ -384,11 +411,14 @@ nro_fail:
   return err;
 }
 
-Error process_enter_main_thread(const Process *process, const CPU_Backend *backend,
+Error process_enter_main_thread(Process *process, const CPU_Backend *backend,
                                 CPU_State *state) {
   if (!process || !backend || !state) {
     return ERR(RESULT_INVALID_ARGUMENT, "process_enter_main_thread: NULL argument");
   }
+  process->main_thread.cpu_state = state;
+  process->main_thread.owns_cpu_state = false;
+  process->main_thread.owns_tls = false;
   for (uint8_t reg = CPU_REG_X0; reg <= CPU_REG_X30; reg++) {
     backend->set_reg(state, reg, 0);
   }

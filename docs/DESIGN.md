@@ -1378,7 +1378,7 @@ typedef struct Service_Interface {
 
 Dozens of services × dozens of commands makes this the prime candidate for the `/new-hle-service` scaffolding command once the pattern is proven on `sm:`.
 
-**Handle table.** Per-process, fixed-size (Horizon caps at 1024), each entry carrying a generation counter so stale handles fault instead of aliasing. Pseudo-handles `0xFFFF8000` (current thread) and `0xFFFF8001` (current process) are resolved before table lookup. All kernel objects (threads, events, sessions, shared memory, transfer memory) live behind it.
+**Handle table.** Per-process, fixed-size (Horizon caps at 1024), each entry carrying a generation counter so stale handles fault instead of aliasing. Pseudo-handles `0xFFFF8000` (current thread) and `0xFFFF8001` (current process) are resolved before table lookup. The process bootstrap registers its embedded main-thread object first, preserving handle `0x8000`; `process_enter_main_thread` then adopts the emulator-owned CPU state without taking ownership of it or the process-owned TLS block. All kernel objects (threads, events, sessions, shared memory, transfer memory) live behind it.
 
 ### Process bootstrap — what "load a game" actually does
 

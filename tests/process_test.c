@@ -194,6 +194,19 @@ static void check_bootstrapped(const Process *process, VMM_Context *vmm, size_t 
   CHECK(guest_is_zero(vmm, as->tls_io.base, TLS_BLOCK_BYTES));
 
   CHECK(process->main_thread_handle == PROCESS_MAIN_THREAD_HANDLE);
+  void *main_thread_object = NULL;
+  CHECK_OK(handle_table_get(&process->handles, PROCESS_MAIN_THREAD_HANDLE,
+                            KERNEL_OBJECT_THREAD, &main_thread_object));
+  CHECK(main_thread_object == &process->main_thread);
+  CHECK(process->main_thread.cpu_state == NULL);
+  CHECK(process->main_thread.tls_gva == process->main_thread_tls_gva);
+  CHECK(process->main_thread.entry_point == process->entry_point);
+  CHECK(process->main_thread.stack_top ==
+        process->main_thread_stack.base + process->main_thread_stack.size);
+  CHECK(process->main_thread.priority == process->npdm.main_thread_priority);
+  CHECK(process->main_thread.preferred_core == process->npdm.main_thread_core_number);
+  CHECK(!process->main_thread.owns_cpu_state && !process->main_thread.owns_tls);
+  CHECK(process->handles.live_count == 1);
   CHECK(strcmp(process->npdm.name, "ProcTest") == 0);
 }
 
@@ -268,6 +281,13 @@ int main(void) {
   CHECK(regs->pc == process.entry_point);
   CHECK(regs->pstate == 0);
   CHECK(cpu->get_sys_reg(emu.cpu_state, CPU_SYSREG_TPIDRRO_EL0) == process.main_thread_tls_gva);
+  CHECK(process.main_thread.cpu_state == emu.cpu_state);
+  CHECK(!process.main_thread.owns_cpu_state && !process.main_thread.owns_tls);
+  void *resolved_thread = NULL;
+  CHECK_OK(handle_table_resolve(&process.handles, HANDLE_PSEUDO_CURRENT_THREAD,
+                                KERNEL_OBJECT_THREAD, &process.main_thread, &process,
+                                &resolved_thread));
+  CHECK(resolved_thread == &process.main_thread);
   CHECK_CODE(process_enter_main_thread(NULL, cpu, emu.cpu_state), RESULT_INVALID_ARGUMENT);
 
   /* A later thread's block comes from the same page, right after the
