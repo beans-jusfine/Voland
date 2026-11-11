@@ -283,23 +283,23 @@ static bool execute_one(InterpreterState *s) {
     return true;
   }
 
-  /* ADD / SUB (immediate), including flag-setting CMP alias. */
-  if (decoded.op == A64_OP_ADD_ADDSUB_IMM || decoded.op == A64_OP_SUB_ADDSUB_IMM || decoded.op == A64_OP_ADDS_ADDSUB_IMM || decoded.op == A64_OP_SUBS_ADDSUB_IMM) {
-    const bool is64=(insn>>31)!=0, sub=((insn>>30)&1u)!=0, set=((insn>>29)&1u)!=0;
-    const unsigned rn=(insn>>5)&31u, rd=insn&31u;
-    const uint64_t imm=((uint64_t)(insn>>10)&0xfffu)<<(((insn>>22)&1u)?12u:0u);
-    const uint64_t a=read_reg(s,rn,is64,true), b=sub?~imm:imm;
-    const uint64_t result=sub?a-imm:a+imm;
-    write_reg(s,rd,result,is64,!set);
-    if (set) {
-      set_nz(s,result,is64);
-      const uint64_t mask=is64?UINT64_MAX:UINT32_MAX;
-      const bool carry=sub?(a>=imm):((result&mask)<(a&mask));
-      const bool overflow=sub?((((a^imm)&(a^result))>>(is64?63:31))&1u)!=0:
-        (((~(a^imm)&(a^result))>>(is64?63:31))&1u)!=0;
-      s->regs.pstate=(s->regs.pstate&0xcfffffffu)|(carry?0x20000000u:0u)|(overflow?0x10000000u:0u);
-    }
-    (void)b; return true;
+  /* ADD / SUB (immediate) consume normalized width, operands, and
+   * pre-shifted immediate; the operation ID carries subtract/flag semantics. */
+  if (decoded.op == A64_OP_ADD_ADDSUB_IMM ||
+      decoded.op == A64_OP_SUB_ADDSUB_IMM ||
+      decoded.op == A64_OP_ADDS_ADDSUB_IMM ||
+      decoded.op == A64_OP_SUBS_ADDSUB_IMM) {
+    const bool is64=(decoded.aux & A64_AUX_IS_64)!=0u;
+    const bool subtract=decoded.op==A64_OP_SUB_ADDSUB_IMM ||
+        decoded.op==A64_OP_SUBS_ADDSUB_IMM;
+    const bool set_flags=decoded.op==A64_OP_ADDS_ADDSUB_IMM ||
+        decoded.op==A64_OP_SUBS_ADDSUB_IMM;
+    const uint64_t left=read_reg(s,decoded.rn,is64,true);
+    const uint64_t result=subtract?left-decoded.imm:left+decoded.imm;
+    write_reg(s,decoded.rd,result,is64,!set_flags);
+    if (set_flags)
+      set_nzcv_addsub(s,left,decoded.imm,result,is64,subtract);
+    return true;
   }
 
   /* ADD / SUB (shifted register), including ADDS/SUBS and CMP aliases. */

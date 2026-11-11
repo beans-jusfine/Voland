@@ -39,6 +39,15 @@ int main(void) {
   CHECK(decoded.op == A64_OP_ADD_ADDSUB_IMM);
   CHECK(decoded.rd == 1u && decoded.rn == 0u && decoded.imm == 8u);
 
+  CHECK(a64_decode(UINT32_C(0xf100203f), &decoded)); /* SUBS XZR,X1,#8 */
+  CHECK(decoded.op == A64_OP_SUBS_ADDSUB_IMM);
+  CHECK(decoded.rd == 31u && decoded.rn == 1u && decoded.imm == 8u);
+  CHECK((decoded.aux & A64_AUX_IS_64) != 0u);
+  CHECK(a64_decode(UINT32_C(0x91400401), &decoded)); /* ADD X1,X0,#1,LSL #12 */
+  CHECK(decoded.op == A64_OP_ADD_ADDSUB_IMM);
+  CHECK(decoded.rd == 1u && decoded.rn == 0u);
+  CHECK(decoded.imm == UINT64_C(4096));
+
   CHECK(a64_decode(UINT32_C(0xf9000441), &decoded)); /* STR X1,[X2,#8] */
   CHECK(decoded.op == A64_OP_STR_IMM_GEN);
   CHECK(decoded.rd == 1u && decoded.rn == 2u && decoded.imm == 8u);
