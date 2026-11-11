@@ -30,6 +30,7 @@ static uint64_t align_up_page(uint64_t value) {
  * the process already owns the TLS block allocated by bootstrap. */
 static Error register_main_thread(Process *process) {
   handle_table_init(&process->handles);
+  ipc_session_pool_init(&process->ipc_sessions);
   memset(&process->main_thread, 0, sizeof(process->main_thread));
   process->main_thread.tls_gva = process->main_thread_tls_gva;
   process->main_thread.entry_point = process->entry_point;

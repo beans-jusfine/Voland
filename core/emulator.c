@@ -69,7 +69,7 @@ Error emulator_create(Emulator* out) {
 
   /* 6. IPC (§25 Phase 1 "Minimal IPC + sm: stub"): sm:'s registry, bound
    * to the well-known port ConnectToNamedPort("sm:") resolves to
-   * (svc_ipc.c). hle_context_init already emptied the session table. No
+   * (svc_ipc.c). No
    * service module registers with sm yet - none exist before Phase 2+. */
   sm_context_init(&out->sm);
   out->hle.sm_object = sm_make_service_object(&out->sm);
@@ -306,7 +306,6 @@ void emulator_unload_program(Emulator* emulator) {
   emulator->main_thread_scheduler_id = 0;
   process_teardown(&emulator->process, emulator->vmm, &emulator->pages);
   page_allocator_reset(&emulator->pages);
-  hle_reset_process_state(&emulator->hle);
   emulator->program_loaded = false;
 }
 

@@ -1,7 +1,6 @@
 /**
- * HIPC + CMIF framing, service-object dispatch, and the Phase 1 session
- * table. See ipc.h for scope, the flagged simplifications, and the wire
- * layout (verified against libnx's sf/hipc.h and sf/cmif.h).
+ * HIPC + CMIF framing, service-object dispatch, and process-owned session
+ * object storage. Guest handles are issued by the generic Handle_Table.
  */
 #include "hle/kernel/ipc.h"
 
@@ -40,42 +39,60 @@ bool ipc_response_add_move_object(IPC_Response *res, Service_Object object) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Session table.                                                       */
+/* Session object storage + generic process handles.                    */
 /* ------------------------------------------------------------------ */
 
-void ipc_session_table_init(IPC_Session_Table *table) {
-  if (!table) return;
-  memset(table, 0, sizeof(*table));
+void ipc_session_pool_init(IPC_Session_Pool *pool) {
+  if (!pool) return;
+  memset(pool, 0, sizeof(*pool));
 }
 
-uint32_t ipc_session_table_open(IPC_Session_Table *table, Service_Object object) {
-  if (!table) return IPC_INVALID_HANDLE;
-  for (uint32_t i = 0; i < IPC_MAX_SESSIONS; i++) {
-    if (table->in_use[i]) continue;
-    table->in_use[i] = true;
-    memset(&table->sessions[i], 0, sizeof(table->sessions[i]));
-    table->sessions[i].object = object;
-    /* Handle value: slot index + 1, so 0 stays IPC_INVALID_HANDLE and the
-     * space is visibly distinct from the Phase 2 table's
-     * (linear_id << 15) | index encoding (ipc.h's "KNOWN SIMPLIFICATION"). */
-    return i + 1u;
+Error ipc_session_open(Handle_Table *handles, IPC_Session_Pool *pool,
+                       Service_Object object, uint32_t *out_handle) {
+  if (!handles || !pool || !out_handle) {
+    return ERR(RESULT_INVALID_ARGUMENT, "ipc_session_open: invalid argument");
   }
-  return IPC_INVALID_HANDLE;
+  for (uint32_t i = 0; i < IPC_MAX_SESSIONS; i++) {
+    if (pool->in_use[i]) continue;
+    IPC_Session *session = &pool->sessions[i];
+    memset(session, 0, sizeof(*session));
+    session->object = object;
+    Error err = handle_table_insert(handles, KERNEL_OBJECT_SESSION, session, out_handle);
+    if (!error_is_ok(err)) {
+      memset(session, 0, sizeof(*session));
+      return err;
+    }
+    pool->in_use[i] = true;
+    return OK;
+  }
+  return ERR(RESULT_OUT_OF_MEMORY, "ipc_session_open: session storage exhausted");
 }
 
-IPC_Session *ipc_session_table_get(IPC_Session_Table *table, uint32_t handle) {
-  if (!table || handle == IPC_INVALID_HANDLE || handle > IPC_MAX_SESSIONS) return NULL;
-  const uint32_t index = handle - 1u;
-  if (!table->in_use[index]) return NULL;
-  return &table->sessions[index];
+IPC_Session *ipc_session_get(const Handle_Table *handles, uint32_t handle) {
+  void *object = NULL;
+  if (!handles ||
+      !error_is_ok(handle_table_get(handles, handle, KERNEL_OBJECT_SESSION, &object))) {
+    return NULL;
+  }
+  return (IPC_Session *)object;
 }
 
-bool ipc_session_table_close(IPC_Session_Table *table, uint32_t handle) {
-  if (!table || handle == IPC_INVALID_HANDLE || handle > IPC_MAX_SESSIONS) return false;
-  const uint32_t index = handle - 1u;
-  if (!table->in_use[index]) return false;
-  table->in_use[index] = false;
-  memset(&table->sessions[index], 0, sizeof(table->sessions[index]));
+bool ipc_session_close(Handle_Table *handles, IPC_Session_Pool *pool,
+                       uint32_t handle) {
+  if (!handles || !pool) return false;
+  IPC_Session *session = ipc_session_get(handles, handle);
+  if (!session) return false;
+  uint32_t slot = IPC_MAX_SESSIONS;
+  for (uint32_t i = 0; i < IPC_MAX_SESSIONS; i++) {
+    if (&pool->sessions[i] == session && pool->in_use[i]) {
+      slot = i;
+      break;
+    }
+  }
+  if (slot == IPC_MAX_SESSIONS) return false;
+  if (!error_is_ok(handle_table_close(handles, handle))) return false;
+  pool->in_use[slot] = false;
+  memset(&pool->sessions[slot], 0, sizeof(pool->sessions[slot]));
   return true;
 }
 

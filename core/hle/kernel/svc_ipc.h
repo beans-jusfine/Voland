@@ -63,11 +63,11 @@
  * requests on it return HLE_RESULT_CONNECTION_CLOSED, and CloseHandle
  * still releases the handle.
  *
- * Session storage: HLE_Context::sessions (ipc.h's IPC_Session_Table, the
- * Phase 1 handle-table stand-in - see that header's "KNOWN
- * SIMPLIFICATION"), emptied by hle_context_init and on program unload by
- * hle_reset_process_state (hle.h). The "sm:" port resolves to
- * HLE_Context::sm_object, which emulator.c binds at emulator_create().
+ * Session objects live in Process::ipc_sessions; their guest handles are
+ * registered as KERNEL_OBJECT_SESSION in Process::handles. Process
+ * bootstrap initializes both, and process_teardown releases the complete
+ * per-process set. The "sm:" port resolves to HLE_Context::sm_object,
+ * which emulator.c binds at emulator_create().
  */
 #ifndef SWITCH_HLE_KERNEL_SVC_IPC_H
 #define SWITCH_HLE_KERNEL_SVC_IPC_H

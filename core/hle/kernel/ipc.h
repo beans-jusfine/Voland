@@ -7,7 +7,7 @@
  * from svc_memory.h: this file is the reusable protocol + dispatch
  * mechanism (parse a request, route it, write a response) with no SVC or
  * TLS knowledge; svc_ipc.h is the thin SVC-shaped layer that owns the TLS
- * command buffer and the session table and calls through to this one.
+ * command buffer and process-owned session objects and calls through to this one.
  * That split is a deviation from §2's repo-structure tree (which lists a
  * single `ipc.{h,c}`) in the same spirit as the already-shipped
  * memory.{h,c} -> svc_memory.{h,c} split (§25 Phase 1 checkbox 5); §2
@@ -62,18 +62,11 @@
  *     (IPC_Response::out_objects), capped at IPC_MAX_OUT_OBJECTS. Copy
  *     handles out: not produced by anything Phase 1 dispatches.
  *
- * KNOWN SIMPLIFICATION, flagged for review (CLAUDE.md "deviations update
- * the doc"): IPC_Session_Table below is a Phase 1 stand-in for §12's
- * generic per-process kernel-object handle table, which process.h already
- * documents as Phase 2 scope ("the Phase 2 handle table must issue
- * exactly [0x8000] to the main thread. Until it exists the constant is
- * the contract"). This table hands out session handles ONLY - no
- * threads, events, shared memory, or transfer memory - from a small flat
- * id space deliberately distinct from the real (linear_id << 15) | index
- * encoding Phase 2 will use (whose first value, 0x8000, is already
- * PROCESS_MAIN_THREAD_HANDLE). When the Phase 2 table lands, this one is
- * deleted whole, not migrated: a session becomes one more object kind in
- * that table's union, not a special case kept alongside it.
+ * Session handles are entries in the process generic Handle_Table
+ * (KERNEL_OBJECT_SESSION). IPC_Session_Pool is stable object storage only:
+ * it does not issue or validate guest handles. The process owns both;
+ * the generic table is authoritative for typed lookup, generations, and
+ * close semantics.
  *
  * OPEN DESIGN QUESTION for maintainer review: Service_Command_Fn's return
  * type. §12's sketch names it `HLE_ServiceResult` without defining it.
@@ -91,6 +84,7 @@
 #include <stdint.h>
 
 #include "common/result.h"
+#include "hle/kernel/handle_table.h"
 #include "hle/kernel/tls.h" /* TLS_IPC_COMMAND_BUFFER_BYTES: the single source
                              * for the command-buffer size every function
                              * below bounds-checks against (no magic numbers,
@@ -247,50 +241,31 @@ typedef struct IPC_Response {
 bool ipc_response_add_move_object(IPC_Response *res, Service_Object object);
 
 /* ------------------------------------------------------------------ */
-/* Session table - see "KNOWN SIMPLIFICATION" above.                   */
+/* Process-owned session object storage. Handles live in Handle_Table.  */
 /* ------------------------------------------------------------------ */
 
 #define IPC_MAX_SESSIONS ((uint32_t)32)
-/* §12: "Domain state (object table) lives on the session from day one,
- * even while most services are stubs." Sized arbitrarily for Phase 1 -
- * nothing populates it until a service actually converts to a domain
- * (out of scope here; see svc_ipc.h). */
 #define IPC_MAX_DOMAIN_OBJECTS ((uint32_t)16)
-
-/* 0 is never a valid handle Voland hands out (Horizon reserves it as
- * "no handle" the same way NULL is "no pointer"); distinguishable at a
- * glance from the Phase 2 table's (linear_id << 15) | index encoding. */
-#define IPC_INVALID_HANDLE ((uint32_t)0)
 
 typedef struct IPC_Session {
   Service_Object object;
-  /* Set by a CLOSE message: the server end is gone, so every later request
-   * fails with the kernel's ConnectionClosed. The handle itself stays
-   * open until CloseHandle, as on real Horizon. */
   bool server_closed;
-  bool is_domain; /* Control-message-driven; always false until that
-                   * message type is implemented (see header comment) */
+  bool is_domain;
   Service_Object domain_objects[IPC_MAX_DOMAIN_OBJECTS];
   uint32_t domain_object_count;
 } IPC_Session;
 
-typedef struct IPC_Session_Table {
+typedef struct IPC_Session_Pool {
   IPC_Session sessions[IPC_MAX_SESSIONS];
   bool in_use[IPC_MAX_SESSIONS];
-} IPC_Session_Table;
+} IPC_Session_Pool;
 
-void ipc_session_table_init(IPC_Session_Table *table);
-
-/* Binds `object` to a fresh handle. IPC_INVALID_HANDLE if every slot is
- * in use; svc_ipc.c reports that to the guest as HLE_RESULT_OUT_OF_SESSIONS
- * (KernelError_OutOfSessions). */
-uint32_t ipc_session_table_open(IPC_Session_Table *table, Service_Object object);
-
-/* NULL if `handle` is IPC_INVALID_HANDLE or not currently open. */
-IPC_Session *ipc_session_table_get(IPC_Session_Table *table, uint32_t handle);
-
-/* Closes `handle`. False (table unchanged) if it was not open. */
-bool ipc_session_table_close(IPC_Session_Table *table, uint32_t handle);
+void ipc_session_pool_init(IPC_Session_Pool *pool);
+Error ipc_session_open(Handle_Table *handles, IPC_Session_Pool *pool,
+                       Service_Object object, uint32_t *out_handle);
+IPC_Session *ipc_session_get(const Handle_Table *handles, uint32_t handle);
+bool ipc_session_close(Handle_Table *handles, IPC_Session_Pool *pool,
+                       uint32_t handle);
 
 /* ------------------------------------------------------------------ */
 /* Protocol functions. Pure: no vmm, no TLS, no session table. Operate   */
@@ -328,7 +303,7 @@ void ipc_dispatch(Service_Object *object, const IPC_Request *req, IPC_Response *
  * `buffer` (TLS_IPC_COMMAND_BUFFER_BYTES bytes). The HIPC type field is
  * written as 0: libnx's hipcParseResponse/cmifParseResponse never read
  * it. `out_handles[i]` is the
- * real guest handle already allocated (ipc_session_table_open) for
+ * real guest handle already allocated (ipc_session_open) for
  * `res->out_objects[i]`; this function only serialises, it never opens a
  * session itself.
  *   RESULT_INVALID_ARGUMENT  NULL buffer/res, buffer_size !=

@@ -3,7 +3,7 @@
  * CloseHandle driven through hle_on_svc the way svc_memory_test.c drives
  * the memory SVCs - registers set by hand, state asserted through the
  * CPU backend, vmm, and (white-box, like svc_memory_test's
- * emu.process.heap_size checks) emu.hle.sessions directly.
+ * emu.process.heap_size checks) emu.process.ipc_sessions directly.
  *
  * Requests are libnx's own bytes (ipc_fixtures.h) and responses are read
  * back with libnx's reading logic, so neither side reuses ipc.c's
@@ -118,7 +118,7 @@ static void load(Test_Env *env, const Byte_Source *nca) {
 
 static uint32_t sessions_in_use(const Emulator *emu) {
   uint32_t count = 0;
-  for (uint32_t i = 0; i < IPC_MAX_SESSIONS; i++) count += emu->hle.sessions.in_use[i] ? 1u : 0u;
+  for (uint32_t i = 0; i < IPC_MAX_SESSIONS; i++) count += emu->process.ipc_sessions.in_use[i] ? 1u : 0u;
   return count;
 }
 
@@ -134,7 +134,8 @@ static uint32_t connect_port(Test_Env *env, const char *name) {
 static uint32_t connect_sm(Test_Env *env) {
   CHECK(connect_port(env, "sm:") == HLE_RESULT_SUCCESS);
   const uint32_t handle = (uint32_t)env->regs->x[1];
-  CHECK(handle != IPC_INVALID_HANDLE);
+  CHECK(handle != 0);
+  CHECK(handle != PROCESS_MAIN_THREAD_HANDLE);
   return handle;
 }
 
@@ -233,7 +234,7 @@ static void test_libnx_sm_session(Test_Env *env) {
   CHECK(view.result == HLE_RESULT_SUCCESS);
   CHECK(view.num_move_handles == 1);
   const uint32_t fsp_handle = view.move_handles[0];
-  IPC_Session *fsp_session = ipc_session_table_get(&env->emu.hle.sessions, fsp_handle);
+  IPC_Session *fsp_session = ipc_session_get(&env->emu.process.handles, fsp_handle);
   CHECK(fsp_session != NULL);
   CHECK(fsp_session->object.interface == &k_fake_fsp_interface);
   CHECK(fsp_session->object.instance == &g_fake_instance_marker);
@@ -252,11 +253,11 @@ static void test_libnx_sm_session(Test_Env *env) {
   uint8_t after[TLS_IPC_COMMAND_BUFFER_BYTES];
   read_tls(env, after);
   CHECK(memcmp(before, after, sizeof(before)) == 0);
-  CHECK(ipc_session_table_get(&env->emu.hle.sessions, fsp_handle) != NULL);
+  CHECK(ipc_session_get(&env->emu.process.handles, fsp_handle) != NULL);
   CHECK(send_fixture(env, fsp_handle, &k_fixture_get_service_fsp) ==
         EXPECT_KERNEL_CONNECTION_CLOSED);
   CHECK(close_handle(env, fsp_handle) == HLE_RESULT_SUCCESS);
-  CHECK(ipc_session_table_get(&env->emu.hle.sessions, fsp_handle) == NULL);
+  CHECK(ipc_session_get(&env->emu.process.handles, fsp_handle) == NULL);
   CHECK(close_handle(env, fsp_handle) == EXPECT_KERNEL_INVALID_HANDLE);
 
   /* GetServiceHandle, unregistered name: the service's failure is in the

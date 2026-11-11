@@ -67,6 +67,7 @@
 #include "cpu/cpu.h"
 #include "hle/kernel/address_space.h"
 #include "hle/kernel/handle_table.h"
+#include "hle/kernel/ipc.h"
 #include "hle/kernel/page_allocator.h"
 #include "hle/kernel/thread.h"
 #include "hle/kernel/tls.h"
@@ -125,6 +126,7 @@ typedef struct Process {
    * handle-table entry (0x8000); its CPU_State is adopted by
    * process_enter_main_thread after the emulator has created it. */
   Handle_Table handles;
+  IPC_Session_Pool ipc_sessions; /* stable storage; guest handles live in handles */
   Guest_Thread main_thread;
   uint32_t main_thread_handle;
   Address_Region main_thread_stack; /* mapped RW; SP starts at base + size */
