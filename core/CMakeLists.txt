@@ -36,6 +36,7 @@ set(SWITCH_CORE_SOURCES
   hle/kernel/page_allocator.c
   hle/kernel/address_space.c
   hle/kernel/process.c
+  hle/kernel/handle_table.c
   hle/kernel/svc_memory.c
   hle/kernel/ipc.c
   hle/kernel/svc_ipc.c
@@ -92,6 +93,7 @@ set(SWITCH_CORE_PUBLIC_HEADERS
   hle/kernel/page_allocator.h
   hle/kernel/address_space.h
   hle/kernel/process.h
+  hle/kernel/handle_table.h
   hle/kernel/svc_memory.h
   hle/kernel/ipc.h
   hle/kernel/svc_ipc.h

@@ -112,6 +112,10 @@ add_executable(svc_ipc_test svc_ipc_test.c)
 target_link_libraries(svc_ipc_test PRIVATE switch_core loader_fixtures)
 add_test(NAME svc_ipc_test COMMAND svc_ipc_test)
 
+add_executable(handle_table_test handle_table_test.c)
+target_link_libraries(handle_table_test PRIVATE switch_core)
+add_test(NAME handle_table_test COMMAND handle_table_test)
+
 # End-to-end NRO fixture: process bootstrap, map, and execute ARM64 code through the scheduler.
 add_executable(nro_execution_test nro_execution_test.c)
 target_link_libraries(nro_execution_test PRIVATE switch_core)
