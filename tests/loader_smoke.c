@@ -162,6 +162,33 @@ int main(void) {
   CHECK(memcmp(nca_image.bytes + nca.header.sections[1].data_offset + (sky.data_offset), k_texture,
                sky.data_size) == 0);
 
+  /* Build a Meta NCA whose CNMT names the Program NCA by content ID. */
+  uint8_t title_cnmt[CNMT_HEADER_SIZE + 0x38];
+  memset(title_cnmt, 0, sizeof(title_cnmt));
+  fixture_put_le64(title_cnmt, PROGRAM_ID);
+  title_cnmt[0x0C] = 0x80; /* Application */
+  fixture_put_le16(title_cnmt + 0x10, 1);
+  for (uint32_t i = 0; i < 16; i++)
+    title_cnmt[CNMT_HEADER_SIZE + 0x20 + i] = (uint8_t)(i + 1);
+  for (uint32_t i = 0; i < 5; i++)
+    title_cnmt[CNMT_HEADER_SIZE + 0x30 + i] = (uint8_t)(nca_image.size >> (i * 8));
+  title_cnmt[CNMT_HEADER_SIZE + 0x36] = NCA_CONTENT_PROGRAM;
+  const Fixture_File meta_files[] = {
+      {"0100000000042000.cnmt", title_cnmt, sizeof(title_cnmt)}};
+  Fixture_Buffer meta_pfs0;
+  fixture_build_pfs0(meta_files, 1, &meta_pfs0);
+  Fixture_NCA_Section meta_sections[4];
+  memset(meta_sections, 0, sizeof(meta_sections));
+  meta_sections[0] = (Fixture_NCA_Section){
+      true, FIXTURE_NCA_FS_TYPE_PFS0, FIXTURE_NCA_HASH_NONE, 1, &meta_pfs0, 0};
+  Fixture_Buffer meta_nca_image;
+  fixture_build_nca(NCA_MAGIC_NCA3, NCA_CONTENT_META, PROGRAM_ID,
+                    meta_sections, &meta_nca_image);
+  Byte_Source meta_source =
+      byte_source_from_memory(meta_nca_image.bytes, meta_nca_image.size);
+  const SystemSoftware_Input title_contents[] = {
+      {"0102030405060708090a0b0c0d0e0f10.nca", &file}};
+
   /* --- Steps 1-4 through the emulator: "load a game". --- */
   Emulator emu;
   CHECK_OK(emulator_create(&emu));
@@ -199,6 +226,18 @@ int main(void) {
   CHECK(emu.pages.used_bytes == 0);
   CHECK_OK(emulator_load_program(&emu, &file, 0));
   CHECK(emu.program_loaded);
+  emulator_unload_program(&emu);
+
+  /* A title launch resolves CNMT content IDs and chooses its Program NCA. */
+  CHECK_CODE(emulator_load_title(&emu, &meta_source, NULL, 0,
+                                 CNMT_CONTENT_LAYOUT_MODERN, 0),
+             RESULT_NOT_FOUND);
+  CHECK(!emu.program_loaded);
+  CHECK_OK(emulator_load_title(&emu, &meta_source, title_contents, 1,
+                               CNMT_CONTENT_LAYOUT_MODERN, 0));
+  CHECK(emu.program_loaded);
+  CHECK(strcmp(emu.process.npdm.name, "Smoke") == 0);
+  emulator_unload_program(&emu);
 
   /* --- The §1.6 user-facing path survives the composition. --- */
   memset(nca_image.bytes + FIXTURE_NCA_OFFSET_MAGIC, 0x5A, 4);
@@ -216,6 +255,8 @@ int main(void) {
   emulator_destroy(&emu);
 
   arena_destroy(&arena);
+  fixture_buffer_free(&meta_nca_image);
+  fixture_buffer_free(&meta_pfs0);
   fixture_buffer_free(&nca_image);
   fixture_buffer_free(&romfs_image);
   fixture_buffer_free(&exefs_image);

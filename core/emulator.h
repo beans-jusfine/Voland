@@ -19,6 +19,7 @@
 #include "hle/kernel/scheduler.h"
 #include "hle/loader/byte_source.h"
 #include "hle/loader/nro.h"
+#include "hle/loader/system_content.h"
 #include "hle/services/sm/sm.h"
 
 /* Scratch for one bootstrap: the ExeFS directory plus the largest
@@ -62,6 +63,18 @@ typedef struct Emulator
  * core module is even instantiated. */
 Error emulator_create(Emulator *out);
 void emulator_destroy(Emulator *emulator);
+
+/* Resolve a user-supplied Meta NCA's CNMT against the supplied, already
+ * decrypted content NCAs, select its unique matched PROGRAM NCA, then use
+ * the normal process bootstrap. This is the title-level launch path; it
+ * does not decrypt inputs or accept encrypted NSP/XCI containers. The
+ * Meta NCA and content sources remain caller-owned. */
+Error emulator_load_title(Emulator *emulator,
+                          const Byte_Source *meta_nca,
+                          const SystemSoftware_Input *content_inputs,
+                          uint32_t content_count,
+                          CNMT_Content_Layout layout,
+                          uint64_t aslr_seed);
 
 /* "Load a game" (§12): parses the decrypted PROGRAM NCA in `nca` (§1.6:
  * pre-decrypted only; RESULT_ENCRYPTED_INPUT otherwise, message naming

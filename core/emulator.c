@@ -5,6 +5,8 @@
 #include "common/log.h"
 #include "hle/loader/exefs.h"
 #include "hle/loader/nca_parse.h"
+#include "hle/loader/meta_nca.h"
+#include "hle/loader/system_content.h"
 #include "hle/loader/npdm.h"
 #include "hle/loader/nro.h"
 
@@ -88,6 +90,74 @@ void emulator_destroy(Emulator* emulator) {
   vmm_destroy(emulator->vmm);
   layout_destroy();
   memset(emulator, 0, sizeof(*emulator));
+}
+
+/* Title-level launch: Meta NCA -> CNMT -> content-ID resolution ->
+ * unique PROGRAM NCA -> the existing NCA/ExeFS/NPDM/process bootstrap.
+ * The temporary metadata arena is released before emulator_load_program()
+ * allocates its larger NSO staging arena. */
+Error emulator_load_title(Emulator *emulator, const Byte_Source *meta_source,
+                          const SystemSoftware_Input *content_inputs,
+                          uint32_t content_count, CNMT_Content_Layout layout,
+                          uint64_t aslr_seed) {
+  if (!emulator || !meta_source || (content_count != 0 && !content_inputs)) {
+    return ERR(RESULT_INVALID_ARGUMENT, "emulator_load_title: invalid argument");
+  }
+  if (emulator->program_loaded) {
+    return ERR(RESULT_INVALID_ARGUMENT,
+               "emulator_load_title: unload the current program first");
+  }
+
+  Arena scratch;
+  if (!arena_create(&scratch, (size_t)16 * 1024 * 1024)) {
+    return ERR(RESULT_OUT_OF_MEMORY, "emulator_load_title: metadata arena");
+  }
+
+  Meta_NCA meta;
+  Error err = meta_nca_open(meta_source, &scratch, layout, &meta);
+  SystemContent_Inventory inventory;
+  if (error_is_ok(err)) {
+    err = system_content_resolve(&meta.cnmt, content_inputs, content_count,
+                                 &scratch, &inventory);
+  }
+
+  const Byte_Source *program_source = NULL;
+  bool found_program = false;
+  if (error_is_ok(err)) {
+    for (uint32_t i = 0; i < meta.cnmt.header.content_count; i++) {
+      const SystemContent_Entry *entry = &inventory.entries[i];
+      if (entry->content->content_type != NCA_CONTENT_PROGRAM) continue;
+      if (found_program) {
+        err = ERR(RESULT_ALREADY_EXISTS,
+                  "emulator_load_title: CNMT contains multiple PROGRAM contents");
+        break;
+      }
+      found_program = true;
+      if (entry->status != SYSTEM_CONTENT_MATCHED) {
+        err = entry->error;
+        if (error_is_ok(err)) {
+          err = ERR(RESULT_NOT_FOUND,
+                    "emulator_load_title: PROGRAM content is not available");
+        }
+        break;
+      }
+      if (entry->input_index >= content_count ||
+          !content_inputs[entry->input_index].source) {
+        err = ERR(RESULT_INVALID_ARGUMENT,
+                  "emulator_load_title: resolved PROGRAM source is invalid");
+        break;
+      }
+      program_source = content_inputs[entry->input_index].source;
+    }
+    if (error_is_ok(err) && !found_program) {
+      err = ERR(RESULT_NOT_FOUND,
+                "emulator_load_title: CNMT contains no PROGRAM content");
+    }
+  }
+
+  arena_destroy(&scratch);
+  if (!error_is_ok(err)) return err;
+  return emulator_load_program(emulator, program_source, aslr_seed);
 }
 
 /* §12 "what load a game actually does", step 1 through 4, with the §1.6
