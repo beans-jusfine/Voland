@@ -245,6 +245,7 @@ Error emulator_load_program(Emulator* emulator, const Byte_Source* nca_source,
   err = scheduler_add_thread(&emulator->scheduler, emulator->cpu_state,
       emulator->process.npdm.main_thread_priority, main_core,
       SCHEDULER_ALL_CORE_AFFINITY, &emulator->main_thread_scheduler_id);
+  if (error_is_ok(err)) emulator->process.main_thread.scheduler_id = emulator->main_thread_scheduler_id;
   if (!error_is_ok(err)) {
     process_teardown(&emulator->process, emulator->vmm, &emulator->pages);
     page_allocator_reset(&emulator->pages);
@@ -290,6 +291,7 @@ Error emulator_load_nro(Emulator *emulator, const Byte_Source *nro_source,
                              emulator->process.npdm.main_thread_priority, core,
                              SCHEDULER_ALL_CORE_AFFINITY,
                              &emulator->main_thread_scheduler_id);
+  if (error_is_ok(err)) emulator->process.main_thread.scheduler_id = emulator->main_thread_scheduler_id;
   if (!error_is_ok(err)) {
     process_teardown(&emulator->process, emulator->vmm, &emulator->pages);
     page_allocator_reset(&emulator->pages);
