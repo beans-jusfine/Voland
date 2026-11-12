@@ -34,6 +34,49 @@ static Guest_Thread *thread_for_state(Process *process, CPU_State *state) {
   return NULL;
 }
 
+static void hle_svc_exit_thread(HLE_Context *context, CPU_State *cpu_state) {
+  if (!context->process || !context->scheduler ||
+      !npdm_svc_allowed(&context->process->npdm, 0x0A)) return;
+  Guest_Thread *thread = thread_for_state(context->process, cpu_state);
+  if (!thread || !thread->scheduler_id) return;
+  (void)scheduler_set_thread_state(context->scheduler, thread->scheduler_id,
+                                   THREAD_RUN_DEAD);
+}
+
+/* Virtual time is one retired instruction per cycle. The design's exact
+ * nanosecond conversion is cycles = ns * 51 / 50; round up so a positive
+ * sleep never wakes before its requested deadline. */
+static uint64_t sleep_ns_to_cycles(uint64_t ns) {
+  const uint64_t whole = ns / 50;
+  const uint64_t remainder = ns % 50;
+  if (whole > UINT64_MAX / 51) return UINT64_MAX;
+  const uint64_t base = whole * 51;
+  const uint64_t tail = (remainder * 51 + 49) / 50;
+  return UINT64_MAX - base < tail ? UINT64_MAX : base + tail;
+}
+
+static void hle_svc_sleep_thread(HLE_Context *context, CPU_State *cpu_state) {
+  if (!context->process || !context->scheduler ||
+      !npdm_svc_allowed(&context->process->npdm, 0x0B)) return;
+  Guest_Thread *thread = thread_for_state(context->process, cpu_state);
+  if (!thread || !thread->scheduler_id) return;
+  const int64_t timeout_ns =
+      (int64_t)context->cpu_backend->get_register_file(cpu_state)->x[0];
+  if (timeout_ns == 0 || timeout_ns == -1 || timeout_ns == -2) {
+    const Scheduler_Yield_Mode mode = timeout_ns == -1
+        ? SCHEDULER_YIELD_MIGRATE
+        : (timeout_ns == -2 ? SCHEDULER_YIELD_ANY : SCHEDULER_YIELD_SAME_CORE);
+    (void)scheduler_yield_thread(context->scheduler, thread->scheduler_id, mode);
+    return;
+  }
+  if (timeout_ns < 0) return;
+  uint64_t cycles = sleep_ns_to_cycles((uint64_t)timeout_ns);
+  const uint64_t available = UINT64_MAX - context->scheduler->virtual_time_cycles;
+  if (cycles > available) cycles = available;
+  if (!cycles) return;
+  (void)scheduler_sleep_thread(context->scheduler, thread->scheduler_id, cycles);
+}
+
 static uint32_t thread_create_result(Error err) {
   switch (err.code) {
   case RESULT_OUT_OF_MEMORY: return HLE_RESULT_OUT_OF_MEMORY;
@@ -245,6 +288,12 @@ void hle_on_svc(CPU_State *cpu_state, uint32_t swi, void *userdata)
     break;
   case 0x09:
     hle_svc_start_thread(context, cpu_state);
+    break;
+  case 0x0A:
+    hle_svc_exit_thread(context, cpu_state);
+    break;
+  case 0x0B:
+    hle_svc_sleep_thread(context, cpu_state);
     break;
   case 0x16:
     hle_svc_close_handle(context, cpu_state);

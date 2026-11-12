@@ -9,10 +9,11 @@
 #define SCHEDULER_QUANTUM_CYCLES UINT64_C(10000)
 #define SCHEDULER_ALL_CORE_AFFINITY UINT64_C(0x7)
 typedef enum Thread_Run_State { THREAD_RUN_CREATED=0, THREAD_RUN_RUNNABLE, THREAD_RUN_WAITING, THREAD_RUN_SLEEPING, THREAD_RUN_DEAD } Thread_Run_State;
+typedef enum Scheduler_Yield_Mode { SCHEDULER_YIELD_SAME_CORE=0, SCHEDULER_YIELD_MIGRATE, SCHEDULER_YIELD_ANY } Scheduler_Yield_Mode;
 typedef struct Scheduler_Thread {
  CPU_State *cpu_state; uint64_t id, affinity_mask, wake_at_vt, last_scheduled_round, cycles_executed;
  uint32_t priority; int32_t ideal_core; uint32_t current_core;
- Thread_Run_State run_state; CPU_ExitReason last_exit_reason;
+ Thread_Run_State run_state; CPU_ExitReason last_exit_reason; bool yielded;
 } Scheduler_Thread;
 typedef struct Scheduler {
  const CPU_Backend *backend; Scheduler_Thread threads[SCHEDULER_MAX_THREADS];
@@ -28,6 +29,7 @@ Error scheduler_init(Scheduler *out,const CPU_Backend *backend);
 Error scheduler_add_thread(Scheduler *scheduler,CPU_State *state,uint32_t priority,uint32_t ideal_core,uint64_t affinity_mask,uint64_t *out_id);
 Error scheduler_set_thread_state(Scheduler *scheduler,uint64_t id,Thread_Run_State state);
 Error scheduler_sleep_thread(Scheduler *scheduler,uint64_t id,uint64_t duration_cycles);
+Error scheduler_yield_thread(Scheduler *scheduler,uint64_t id,Scheduler_Yield_Mode mode);
 Error scheduler_remove_thread(Scheduler *scheduler,uint64_t id);
 /* Pausing freezes guest execution and virtual time; thread state is preserved. */
 Error scheduler_set_paused(Scheduler *scheduler,bool paused);

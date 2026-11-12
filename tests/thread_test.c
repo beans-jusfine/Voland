@@ -13,7 +13,10 @@
 #include "common/vmm.h"
 #include "hle/hle.h"
 #include "hle/kernel/thread.h"
+#include "hle/kernel/scheduler.h"
 #include "hle/kernel/tls.h"
+
+#include <string.h>
 
 #define PAGE VMM_PAGE_SIZE
 #define TLS_REGION_BASE ((uint64_t)0x20000000)
@@ -100,6 +103,37 @@ int main(void) {
   CHECK(cpu->get_reg(a.cpu_state, CPU_REG_X0) == ARGUMENT); /* a untouched */
   /* And obeys the bounded-run contract (§9). */
   CHECK(cpu->run(b.cpu_state, 100) == CPU_EXIT_CYCLES_ELAPSED);
+
+  /* ExitThread and SleepThread operate on the currently scheduled thread. */
+  Process process;
+  memset(&process, 0, sizeof(process));
+  process.child_threads[0] = b;
+  process.npdm.capabilities.svc_mask[0] =
+      (UINT64_C(1) << 0x0A) | (UINT64_C(1) << 0x0B);
+  Scheduler scheduler;
+  CHECK_OK(scheduler_init(&scheduler, cpu));
+  uint64_t scheduler_id = 0;
+  CHECK_OK(scheduler_add_thread(&scheduler, b.cpu_state, b.priority, 1,
+                                SCHEDULER_ALL_CORE_AFFINITY, &scheduler_id));
+  process.child_threads[0].scheduler_id = scheduler_id;
+  hle.process = &process;
+  hle.scheduler = &scheduler;
+  cpu->set_reg(b.cpu_state, CPU_REG_X0, 50);
+  hle_on_svc(b.cpu_state, 0x0B, &hle);
+  const Scheduler_Thread *scheduled = scheduler_find_thread(&scheduler, scheduler_id);
+  CHECK(scheduled != NULL && scheduled->run_state == THREAD_RUN_SLEEPING);
+  CHECK(scheduled->wake_at_vt == 51); /* ceil(50ns * 51/50) */
+  CHECK_OK(scheduler_set_thread_state(&scheduler, scheduler_id, THREAD_RUN_RUNNABLE));
+  cpu->set_reg(b.cpu_state, CPU_REG_X0, 0);
+  hle_on_svc(b.cpu_state, 0x0B, &hle);
+  scheduled = scheduler_find_thread(&scheduler, scheduler_id);
+  CHECK(scheduled != NULL && scheduled->run_state == THREAD_RUN_RUNNABLE && scheduled->yielded);
+  hle_on_svc(b.cpu_state, 0x0A, &hle);
+  CHECK(scheduler_find_thread(&scheduler, scheduler_id)->run_state == THREAD_RUN_DEAD);
+  CHECK_OK(scheduler_remove_thread(&scheduler, scheduler_id));
+  memset(&process, 0, sizeof(process));
+  hle.process = NULL;
+  hle.scheduler = NULL;
 
   /* Rejections leave the pool untouched. */
   Guest_Thread rejected;

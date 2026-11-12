@@ -12,6 +12,19 @@ Error scheduler_add_thread(Scheduler *s,CPU_State *state,uint32_t priority,uint3
 }
 Error scheduler_set_thread_state(Scheduler *s,uint64_t id,Thread_Run_State state){Scheduler_Thread *t=find_mutable(s,id);if(!t||state<THREAD_RUN_CREATED||state>THREAD_RUN_DEAD)return ERR(RESULT_INVALID_ARGUMENT,"scheduler_set_thread_state: unknown thread or state");t->run_state=state;return OK;}
 Error scheduler_sleep_thread(Scheduler *s,uint64_t id,uint64_t duration){Scheduler_Thread *t=find_mutable(s,id);if(!t||!duration||UINT64_MAX-s->virtual_time_cycles<duration)return ERR(RESULT_INVALID_ARGUMENT,"scheduler_sleep_thread: invalid thread or duration");t->wake_at_vt=s->virtual_time_cycles+duration;t->run_state=THREAD_RUN_SLEEPING;return OK;}
+Error scheduler_yield_thread(Scheduler *s,uint64_t id,Scheduler_Yield_Mode mode){
+ Scheduler_Thread *t=find_mutable(s,id);
+ if(!t||t->run_state!=THREAD_RUN_RUNNABLE||mode>SCHEDULER_YIELD_ANY)
+  return ERR(RESULT_INVALID_ARGUMENT,"scheduler_yield_thread: invalid thread or mode");
+ t->yielded=true;
+ if(mode==SCHEDULER_YIELD_MIGRATE){
+  for(uint32_t offset=1;offset<SCHEDULER_VIRTUAL_CORE_COUNT;offset++){
+   uint32_t core=(t->current_core+offset)%SCHEDULER_VIRTUAL_CORE_COUNT;
+   if(t->affinity_mask&(UINT64_C(1)<<core)){t->ideal_core=(int32_t)core;break;}
+  }
+ }
+ return OK;
+}
 Error scheduler_remove_thread(Scheduler *s,uint64_t id){Scheduler_Thread *t=find_mutable(s,id);if(!t)return ERR(RESULT_NOT_FOUND,"scheduler_remove_thread: thread not found");memset(t,0,sizeof(*t));s->thread_count--;return OK;}
 Error scheduler_set_paused(Scheduler *s,bool paused){if(!s||!s->backend)return ERR(RESULT_INVALID_ARGUMENT,"scheduler_set_paused: invalid scheduler");s->paused=paused;return OK;}
 bool scheduler_is_paused(const Scheduler *s){return s&&s->paused;}
@@ -28,22 +41,27 @@ Scheduler_Tick_Result scheduler_tick_budget(Scheduler *s,uint64_t cycle_budget){
   if(t->cpu_state&&t->run_state==THREAD_RUN_SLEEPING&&t->wake_at_vt<=s->virtual_time_cycles){t->run_state=THREAD_RUN_RUNNABLE;t->wake_at_vt=0;}
  }
  for(uint32_t core=0;core<SCHEDULER_VIRTUAL_CORE_COUNT;core++){
-  Scheduler_Thread *t=pick_thread(s,core);
-  if(!t){r.idle_cores++;continue;}
-  r.cores_run++;t->last_scheduled_round=s->round;t->current_core=core;
-  uint64_t remaining=cycle_budget;
-  while(remaining&&t->run_state==THREAD_RUN_RUNNABLE){
-   CPU_ExitReason why=s->backend->run(t->cpu_state,remaining);
-   uint64_t used=s->backend->get_cycles_consumed(t->cpu_state);
-   t->last_exit_reason=why;r.last_exit_reason=why;r.did_work=true;
-   t->cycles_executed+=used;r.guest_cycles_executed+=used;
-   if(used>=remaining)remaining=0;else remaining-=used;
-   if(why==CPU_EXIT_FAULT||why==CPU_EXIT_HALT){
-    t->run_state=THREAD_RUN_DEAD;if(why==CPU_EXIT_FAULT)r.faulted_threads++;break;
+  uint64_t remaining=cycle_budget;bool core_did_work=false;bool stop_core=false;
+  while(remaining){
+   Scheduler_Thread *t=pick_thread(s,core);
+   if(!t)break;
+   t->last_scheduled_round=s->round;t->current_core=core;
+   while(remaining&&t->run_state==THREAD_RUN_RUNNABLE){
+    CPU_ExitReason why=s->backend->run(t->cpu_state,remaining);
+    uint64_t used=s->backend->get_cycles_consumed(t->cpu_state);
+    t->last_exit_reason=why;r.last_exit_reason=why;r.did_work=true;core_did_work=true;
+    t->cycles_executed+=used;r.guest_cycles_executed+=used;
+    if(used>=remaining)remaining=0;else remaining-=used;
+    if(why==CPU_EXIT_FAULT||why==CPU_EXIT_HALT){
+     t->run_state=THREAD_RUN_DEAD;if(why==CPU_EXIT_FAULT)r.faulted_threads++;break;
+    }
+    if(t->yielded){t->yielded=false;break;}
+    if(why==CPU_EXIT_BREAKPOINT||why==CPU_EXIT_CYCLES_ELAPSED){stop_core=true;break;}
+    if(!used||(why==CPU_EXIT_SVC&&t->run_state!=THREAD_RUN_RUNNABLE))break;
    }
-   if(why==CPU_EXIT_BREAKPOINT||why==CPU_EXIT_CYCLES_ELAPSED||!used||
-      (why==CPU_EXIT_SVC&&t->run_state!=THREAD_RUN_RUNNABLE))break;
+   if(stop_core)break;
   }
+  if(core_did_work)r.cores_run++;else r.idle_cores++;
  }
  if(UINT64_MAX-s->virtual_time_cycles>=cycle_budget)s->virtual_time_cycles+=cycle_budget;
  r.virtual_time_cycles=s->virtual_time_cycles;
